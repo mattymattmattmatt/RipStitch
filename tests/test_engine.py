@@ -123,5 +123,21 @@ class OriginTests(unittest.TestCase):
         self.assertFalse(eng.origin_allowed(None))
 
 
+class InstallerHelperTests(unittest.TestCase):
+    def test_version_compare(self):
+        self.assertGreater(eng.vtuple("1.10.0"), eng.vtuple("1.9.9"))
+        self.assertEqual(eng.vtuple("1.1"), (1, 1))
+
+    def test_manual_install_kind_without_marker(self):
+        self.assertEqual(eng.install_kind(), "manual")
+
+    def test_console_python_leaves_normal_interpreters_alone(self):
+        self.assertEqual(eng.console_python("/usr/bin/python3"), Path("/usr/bin/python3"))
+
+    def test_auto_update_on_by_default(self):
+        self.assertTrue(eng.DEFAULTS["auto_update"])
+        self.assertFalse(eng.validate_config({"auto_update": 0})["auto_update"])
+
+
 if __name__ == "__main__":
     unittest.main()

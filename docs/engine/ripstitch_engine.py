@@ -7,6 +7,8 @@ the RipStitch web app can read links and save videos straight to your disk.
 Nothing is uploaded anywhere; the only traffic is the download itself.
 
     python ripstitch_engine.py              start the engine and open the app
+    python ripstitch_engine.py --background run quietly (what the installers use)
+    python ripstitch_engine.py --stop       stop a running engine
     python ripstitch_engine.py --help       every option
 
 Standard library only. yt-dlp is installed on first run if it is missing,
@@ -28,6 +30,7 @@ import sys
 import threading
 import time
 import traceback
+import urllib.request
 import webbrowser
 from collections import OrderedDict
 from http import HTTPStatus
@@ -35,11 +38,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 DEFAULT_PORT = 8731
-APP_URL = "https://mattymattmattmatt.github.io/RipStitch/"
+APP_URL = os.environ.get("RIPSTITCH_APP_URL") or "https://mattymattmattmatt.github.io/RipStitch/"
 TRUSTED_ORIGINS = {"https://mattymattmattmatt.github.io"}
 ENGINE_PATH = Path(__file__).resolve()
+APP_DIR = ENGINE_PATH.parent.parent        # installed layout: <app>/engine, <app>/bin, <app>/python
 IS_WIN = os.name == "nt"
 IS_MAC = sys.platform == "darwin"
 NO_WINDOW = {"creationflags": 0x08000000} if IS_WIN else {}  # CREATE_NO_WINDOW
@@ -62,6 +66,51 @@ CONF_FILE = CONF_DIR / "config.json"
 JOBS_FILE = CONF_DIR / "history.json"
 ARCHIVE_FILE = CONF_DIR / "archive.txt"
 VENV_DIR = CONF_DIR / "runtime"
+LOG_FILE = CONF_DIR / "engine.log"
+STATE_FILE = CONF_DIR / "state.json"
+
+
+def install_kind() -> str:
+    """How this engine got here: the Windows app, the Mac/Linux install script, or by hand."""
+    try:
+        return json.loads((APP_DIR / "installed.json").read_text("utf-8-sig")).get("kind") or "manual"
+    except Exception:
+        return "manual"
+
+
+def prepare_path() -> None:
+    """Put bundled and commonly-installed tools on PATH, so yt-dlp finds FFmpeg and Deno even when
+    started at login (where PATH is minimal)."""
+    extra = [APP_DIR / "bin", Path.home() / ".deno" / "bin"]
+    if not IS_WIN:
+        extra += [Path("/opt/homebrew/bin"), Path("/usr/local/bin"), Path("/usr/bin")]
+    have = os.environ.get("PATH", "").split(os.pathsep)
+    add = [str(d) for d in extra if d.is_dir() and str(d) not in have]
+    if add:
+        os.environ["PATH"] = os.pathsep.join(add + have)
+
+
+def console_python(p) -> Path:
+    """pythonw.exe has no console streams; child processes use its python.exe sibling (window hidden)."""
+    p = Path(p)
+    if IS_WIN and p.name.lower() == "pythonw.exe" and p.with_name("python.exe").exists():
+        return p.with_name("python.exe")
+    return p
+
+
+def load_state() -> dict:
+    try:
+        return json.loads(STATE_FILE.read_text("utf-8"))
+    except Exception:
+        return {}
+
+
+def save_state(st: dict) -> None:
+    try:
+        CONF_DIR.mkdir(parents=True, exist_ok=True)
+        STATE_FILE.write_text(json.dumps(st), "utf-8")
+    except OSError:
+        pass
 
 DEFAULTS = {
     "out_dir": str(Path.home() / "Downloads" / "RipStitch"),
@@ -80,6 +129,7 @@ DEFAULTS = {
     "sponsorblock": False,
     "archive": False,
     "compat": False,
+    "auto_update": True,
     "extra_origins": [],
 }
 CHOICES = {
@@ -185,7 +235,9 @@ def ytdlp_version(py) -> str | None:
 
 def find_runtime() -> None:
     with RUNTIME_LOCK:
-        for py, where in ((venv_python(), "private"), (Path(sys.executable), "system")):
+        me = console_python(sys.executable)
+        mine = "bundled" if APP_DIR / "python" in me.parents else "system"
+        for py, where in ((venv_python(), "private"), (me, mine)):
             if py.exists():
                 v = ytdlp_version(py)
                 if v:
@@ -205,11 +257,20 @@ def _pip(py, *args, timeout=600) -> tuple[bool, str]:
 
 def install_ytdlp(echo=None) -> tuple[bool, str]:
     """Install or upgrade yt-dlp. Prefers a private venv so system Python stays untouched."""
+    with UPDATE_LOCK:
+        return _install_ytdlp(echo)
+
+
+UPDATE_LOCK = threading.Lock()
+
+
+def _install_ytdlp(echo=None) -> tuple[bool, str]:
     say = echo or (lambda s: None)
     log = []
     pkg = "yt-dlp[default]"
-    if RUNTIME["where"] == "system":
-        ok, out = _pip(sys.executable, pkg)
+    me = console_python(sys.executable)
+    if RUNTIME["where"] in ("system", "bundled"):
+        ok, out = _pip(me, pkg)
         log.append(out)
         if ok:
             find_runtime()
@@ -223,7 +284,7 @@ def install_ytdlp(echo=None) -> tuple[bool, str]:
             venv.EnvBuilder(with_pip=True, clear=False).create(VENV_DIR)
         except Exception as e:
             log.append(f"venv unavailable ({e}); falling back to pip --user")
-            ok, out = _pip(sys.executable, "--user", pkg)
+            ok, out = _pip(me, "--user", pkg)
             log.append(out)
             find_runtime()
             return ok and bool(RUNTIME["py"]), "\n".join(log)
@@ -904,6 +965,86 @@ def probe(url: str, playlist: bool) -> dict:
     return result
 
 
+def busy() -> bool:
+    return any(j.status in ("queued", "running", "merging") for j in list(MANAGER.jobs.values()))
+
+
+def auto_update_loop():
+    """Sites change constantly; keep yt-dlp fresh once a day while nothing is downloading."""
+    time.sleep(120)
+    while True:
+        try:
+            st = load_state()
+            if CFG.get("auto_update", True) and RUNTIME["py"] and not busy() \
+                    and time.time() - st.get("ytdlp_checked", 0) > 20 * 3600:
+                before = RUNTIME["ytdlp"]
+                ok, out = install_ytdlp()
+                st["ytdlp_checked"] = time.time()
+                save_state(st)
+                if ok and RUNTIME["ytdlp"] != before:
+                    PROBE_CACHE.clear()
+                    print(f"  ↑ yt-dlp updated {before} → {RUNTIME['ytdlp']}")
+                elif not ok:
+                    print("  ! yt-dlp auto-update failed: " + (out.strip().splitlines() or ["?"])[-1])
+        except Exception as e:
+            print(f"  ! auto-update error: {e}")
+        time.sleep(3600)
+
+
+def vtuple(v: str):
+    return tuple(int(x) for x in re.findall(r"\d+", v)[:3])
+
+
+def self_update() -> tuple[bool, str]:
+    """Fetch the engine published next to the app and swap it in. Returns (updated, version or reason)."""
+    url = APP_URL + "engine/ripstitch_engine.py?v=" + str(int(time.time()))
+    data = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": f"RipStitchEngine/{VERSION}"}),
+                                  timeout=30).read()
+    text = data.decode("utf-8")
+    m = re.search(r'^VERSION = "([\d.]+)"', text, re.M)
+    if "RipStitch Engine" not in text or not m:
+        raise ValueError("the downloaded file isn't a RipStitch engine")
+    if vtuple(m.group(1)) <= vtuple(VERSION):
+        return False, f"Engine {VERSION} is already the latest"
+    compile(text, str(ENGINE_PATH), "exec")  # refuse anything that doesn't even parse
+    shutil.copy2(ENGINE_PATH, ENGINE_PATH.with_name(ENGINE_PATH.name + ".bak"))
+    tmp = ENGINE_PATH.with_name(ENGINE_PATH.name + ".new")
+    tmp.write_bytes(data)
+    os.replace(tmp, ENGINE_PATH)
+    return True, m.group(1)
+
+
+RESTART = {"now": False}
+
+
+def restart(background: bool):
+    args = [a for a in sys.argv[1:] if a not in ("--open", "--install")]
+    cmd = [sys.executable, str(ENGINE_PATH), *args]
+    print(f"  restarting: {' '.join(cmd)}")
+    if IS_WIN:
+        flags = (0x00000008 | 0x00000200) if background else 0x00000010  # detached / new console
+        subprocess.Popen(cmd, creationflags=flags, close_fds=True)
+        os._exit(0)
+    os.execv(sys.executable, cmd)
+
+
+def stop_running(port: int) -> bool:
+    """Ask an engine on this machine to shut down (used by uninstallers and `--stop`)."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        opener.open(urllib.request.Request(f"http://127.0.0.1:{port}/api/shutdown", data=b"{}", method="POST",
+                                           headers={"Content-Type": "application/json"}), timeout=5).read()
+    except Exception:
+        return False
+    import socket
+    for _ in range(80):
+        with socket.socket() as sk:
+            if sk.connect_ex(("127.0.0.1", port)) != 0:
+                return True
+        time.sleep(0.1)
+    return True
+
+
 def reveal(path: str | None):
     with CFG_LOCK:
         out = CFG["out_dir"]
@@ -960,6 +1101,7 @@ def resolve_in_out_dir(rel: str) -> Path:
 # HTTP
 # --------------------------------------------------------------------------
 TOKEN = secrets.token_urlsafe(18)
+SERVER: ThreadingHTTPServer
 MANAGER: Manager
 SITE_DIR: Path | None = None
 PORT = DEFAULT_PORT
@@ -999,6 +1141,7 @@ def health() -> dict:
         "ffmpeg": TOOLS["ffmpeg"], "ffmpeg_version": TOOLS["ffmpeg_version"], "js_runtime": TOOLS["js"],
         "free_bytes": free_bytes(cfg["out_dir"]), "out_dir": cfg["out_dir"], "config": cfg,
         "platform": "windows" if IS_WIN else "mac" if IS_MAC else "linux",
+        "install": install_kind(), "log_file": str(LOG_FILE),
         "defaults": DEFAULTS, "choices": CHOICES,
     }
 
@@ -1181,12 +1324,28 @@ class Handler(BaseHTTPRequestHandler):
                 before = RUNTIME["ytdlp"]
                 ok, out = install_ytdlp()
                 after = RUNTIME["ytdlp"]
+                if ok:
+                    save_state(dict(load_state(), ytdlp_checked=time.time()))
                 PROBE_CACHE.clear()
                 note = (f"yt-dlp {after} installed" if not before and after else
                         f"updated {before} → {after}" if before != after and after else
                         f"yt-dlp {after} is already the latest" if ok else "update failed")
                 return self._json(200 if ok else 500, {"ok": ok, "note": note, "ytdlp": after,
                                                        "output": out[-4000:], "error": None if ok else out[-1500:]})
+            if path == "/api/shutdown":
+                self._json(200, {"ok": True})
+                threading.Thread(target=SERVER.shutdown, daemon=True).start()
+                return
+            if path == "/api/engine-update":
+                if busy():
+                    return self._json(409, {"ok": False, "error": "Finish or stop the downloads in progress first."})
+                updated, info = self_update()
+                if not updated:
+                    return self._json(200, {"ok": True, "updated": False, "note": info})
+                self._json(200, {"ok": True, "updated": True, "version": info, "note": f"Engine updated to {info}"})
+                RESTART["now"] = True
+                threading.Thread(target=SERVER.shutdown, daemon=True).start()
+                return
             if path == "/api/reveal":
                 p = body.get("path")
                 if body.get("id"):
@@ -1296,7 +1455,7 @@ class Handler(BaseHTTPRequestHandler):
 # main
 # --------------------------------------------------------------------------
 def color(s, c):
-    if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
+    if not getattr(sys.stdout, "isatty", lambda: False)() or os.environ.get("NO_COLOR"):
         return s
     return f"\x1b[{c}m{s}\x1b[0m"
 
@@ -1308,17 +1467,29 @@ def banner():
     print("  " + color("─" * 44, d))
 
 
+def log_to_file():
+    """Background mode has no console: everything printed goes to engine.log instead."""
+    CONF_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        if LOG_FILE.exists() and LOG_FILE.stat().st_size > 2_000_000:
+            os.replace(LOG_FILE, LOG_FILE.with_name("engine.old.log"))
+    except OSError:
+        pass
+    f = open(LOG_FILE, "a", encoding="utf-8", buffering=1)
+    sys.stdout = sys.stderr = f
+    print(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} · engine {VERSION} · {install_kind()} · python {platform.python_version()} ===")
+
+
 def main():
-    global MANAGER, SITE_DIR, PORT, VERBOSE
+    global MANAGER, SITE_DIR, PORT, VERBOSE, SERVER
     if "--worker" in sys.argv:
         sys.exit(worker_main())
-    try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
-        pass
     ap = argparse.ArgumentParser(description="RipStitch Engine: lets the RipStitch web app download with yt-dlp.")
     ap.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"port on 127.0.0.1 (default {DEFAULT_PORT})")
+    ap.add_argument("--background", action="store_true", help="run quietly: no console, log to a file, no browser")
+    ap.add_argument("--open", action="store_true", help="open the app in a browser once running (even in background)")
     ap.add_argument("--no-browser", action="store_true", help="don't open the app in a browser")
+    ap.add_argument("--stop", action="store_true", help="stop the engine running on this computer, then exit")
     ap.add_argument("--allow-origin", action="append", default=[], metavar="URL",
                     help="also trust this site, e.g. https://you.github.io (repeatable)")
     ap.add_argument("--app-url", default=APP_URL, help="the hosted app to open on start")
@@ -1330,20 +1501,35 @@ def main():
     VERBOSE, PORT = args.verbose, args.port
     EXTRA_ORIGINS.update(o.rstrip("/") for o in args.allow_origin)
 
+    if args.stop:
+        sys.exit(0 if stop_running(PORT) else 1)
+    quiet = args.background or sys.stdout is None
+    if quiet:
+        log_to_file()
+    else:
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+    prepare_path()
+
     banner()
     load_config()
     if args.out:
         CFG.update(validate_config({"out_dir": args.out}))
         save_config()
-    print(color("  checking tools…", "2"), end="\r", flush=True)
+    if not quiet:
+        print(color("  checking tools…", "2"), end="\r", flush=True)
     find_runtime()
     check_tools(force=True)
 
     if args.install or not RUNTIME["py"]:
+        ans = "y"
         if not RUNTIME["py"] and not args.install:
             print("  yt-dlp isn't installed yet — it does the actual downloading.")
-            ans = "y"
-            if sys.stdin and sys.stdin.isatty():
+            if quiet:
+                print("  installing it now…")
+            elif sys.stdin and sys.stdin.isatty():
                 try:
                     ans = input("  Install it now? [Y/n] ").strip().lower() or "y"
                 except EOFError:
@@ -1351,50 +1537,56 @@ def main():
             else:
                 ans = "n"
                 print("  (not interactive — press “Install yt-dlp” in the app's Setup instead)")
-        else:
-            ans = "y"
         if ans.startswith("y"):
             ok, out = install_ytdlp(echo=lambda s: print("  " + s))
             print("  " + (color(f"✓ yt-dlp {RUNTIME['ytdlp']} ready", "32") if ok else color("✗ install failed:", "31")))
             if not ok:
                 print("\n".join("    " + l for l in out.splitlines()[-12:]))
+            elif args.install:
+                save_state(dict(load_state(), ytdlp_checked=time.time()))
         if args.install:
-            return
+            sys.exit(0 if RUNTIME["py"] else 1)
 
     here = ENGINE_PATH.parent
     for cand in (here.parent, here):
         if (cand / "index.html").is_file() and (cand / "js").is_dir():
             SITE_DIR = cand.resolve()
             break
+    local = f"http://127.0.0.1:{PORT}/"
+    app = local if SITE_DIR else args.app_url
+    want_browser = args.open or not (args.no_browser or quiet)
 
     MANAGER = Manager()
     MANAGER.load()
     try:
-        httpd = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+        SERVER = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     except OSError:
         print(color(f"  Port {PORT} is busy — the engine is probably already running.", "33"))
-        print(f"  Open {args.app_url} (or start with --port 8732).")
-        if not args.no_browser:
+        if not quiet:
+            print(f"  Open {args.app_url} (or start with --port 8732).")
+        if want_browser:
             webbrowser.open(args.app_url)
         return
-    httpd.daemon_threads = True
+    SERVER.daemon_threads = True
 
     ok, bad = color("✓", "32"), color("✗", "31")
-    print(" " * 30, end="\r")
-    print(f"  {ok if RUNTIME['ytdlp'] else bad} yt-dlp   {RUNTIME['ytdlp'] or 'missing — install from the app'}")
+    if not quiet:
+        print(" " * 30, end="\r")
+    print(f"  {ok if RUNTIME['ytdlp'] else bad} yt-dlp   {RUNTIME['ytdlp'] or 'missing — install from the app'}"
+          + (f" ({RUNTIME['where']})" if RUNTIME["where"] else ""))
     print(f"  {ok if TOOLS['ffmpeg'] else bad} ffmpeg   {TOOLS['ffmpeg_version'] if TOOLS['ffmpeg'] else 'missing — needed for HD merges and audio'}")
     print(f"  {ok if TOOLS['js'] else color('•', '33')} js       {TOOLS['js'] or 'none — install Deno for full YouTube support'}")
     print(f"  {color('→', '2')} saving to {CFG['out_dir']}")
-    local = f"http://127.0.0.1:{PORT}/"
-    app = local if SITE_DIR else args.app_url
     print()
     print("  " + color("Ready.", "1") + " Open the app: " + color(app, "4"))
     if SITE_DIR:
         print(color(f"  (also works with {args.app_url})", "2"))
-    print(color("  Leave this window open while you use Rip. Ctrl+C stops the engine.", "2"))
-    print()
-    if not args.no_browser:
+    if not quiet:
+        print(color("  Leave this window open while you use Rip. Ctrl+C stops the engine.", "2"))
+        print()
+    if want_browser:
         threading.Timer(0.6, lambda: webbrowser.open(app)).start()
+    threading.Thread(target=auto_update_loop, daemon=True, name="auto-update").start()
 
     def stop(*_):
         raise KeyboardInterrupt
@@ -1404,13 +1596,16 @@ def main():
     except Exception:
         pass
     try:
-        httpd.serve_forever(poll_interval=0.5)
+        SERVER.serve_forever(poll_interval=0.5)
     except KeyboardInterrupt:
         print("\n  stopping…")
     finally:
         MANAGER.cancel_all()
         MANAGER._save()
-        httpd.server_close()
+        SERVER.server_close()
+    print("  engine stopped")
+    if RESTART["now"]:
+        restart(quiet)
 
 
 if __name__ == "__main__":

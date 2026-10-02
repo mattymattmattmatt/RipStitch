@@ -22,18 +22,20 @@ The tools talk to each other: a finished download is one click (or zero, with **
 
 **Stitch works straight away.** Open the site, drop clips on it, done. Nothing is uploaded; the browser reads the files directly.
 
-**Rip needs the RipStitch Engine**, a single Python file that runs [yt-dlp](https://github.com/yt-dlp/yt-dlp) on your computer. Browsers can't download from YouTube and friends on their own, and this way videos go straight to your Downloads folder without passing through anyone's server. The Rip tab walks you through it with copy-ready commands for your system. In short:
+**Rip needs the RipStitch Engine**, a small helper that runs [yt-dlp](https://github.com/yt-dlp/yt-dlp) on your computer. Browsers can't download from YouTube and friends on their own, and this way videos go straight to your Downloads folder without passing through anyone's server. You install it once; after that the site just works.
 
-1. Install Python 3.10+ and FFmpeg. Deno is optional but gives full YouTube support.
-   - Windows: `winget install -e --id Python.Python.3.12` and `winget install -e --id Gyan.FFmpeg`
-   - macOS: `brew install python ffmpeg deno`
-   - Debian/Ubuntu: `sudo apt install python3 python3-venv ffmpeg`
-2. Get the engine and start it:
-   - Windows (PowerShell): `irm https://mattymattmattmatt.github.io/RipStitch/engine/ripstitch_engine.py -OutFile ripstitch_engine.py; py ripstitch_engine.py`
-   - macOS / Linux: `curl -fsSLO https://mattymattmattmatt.github.io/RipStitch/engine/ripstitch_engine.py && python3 ripstitch_engine.py`
-3. Come back to the site. It finds the engine by itself.
+| | |
+|---|---|
+| **Windows** | [**Download RipStitch-Setup.exe**](https://github.com/mattymattmattmatt/RipStitch/releases/download/engine-latest/RipStitch-Setup.exe) and run it. Python, yt-dlp, FFmpeg and Deno are included, and no admin rights are needed. If SmartScreen says *Windows protected your PC*, click **More info → Run anyway**; the installer isn't code-signed. |
+| **macOS / Linux** | Paste into Terminal: `curl -fsSL https://mattymattmattmatt.github.io/RipStitch/engine/install.sh \| bash` |
 
-On first run the engine installs yt-dlp into its own private folder, so it never touches your system Python. If your browser asks whether the site may talk to apps on your device, choose **Allow**.
+Either way the engine starts by itself when you sign in, runs quietly in the background, updates yt-dlp once a day, and the site offers a one-click update when a newer engine is published. If your browser asks whether the site may talk to apps on your device, choose **Allow**.
+
+To remove it: on Windows use **Settings → Apps → RipStitch Engine**; on macOS / Linux run the same line with `-s -- --uninstall` after `bash`. Your downloads and settings are kept.
+
+Prefer to run it by hand? Install Python 3.10+ and FFmpeg, download [`ripstitch_engine.py`](docs/engine/ripstitch_engine.py) and run `python3 ripstitch_engine.py` (`py` on Windows). It installs yt-dlp into its own private folder on first run.
+
+The Windows installer is built and tested by [a GitHub Actions workflow](.github/workflows/windows-installer.yml): it installs on a clean Windows machine, runs real downloads through it, and only then publishes it.
 
 ## Publishing on GitHub Pages
 
@@ -65,7 +67,8 @@ Press <kbd>?</kbd> in the app for every keyboard shortcut.
 ## The engine
 
 ```
-python ripstitch_engine.py [--port 8731] [--out FOLDER] [--allow-origin URL] [--no-browser] [--install]
+python ripstitch_engine.py [--background] [--open] [--stop] [--port 8731] [--out FOLDER]
+                           [--allow-origin URL] [--no-browser] [--install]
 ```
 
 | | |
@@ -73,7 +76,7 @@ python ripstitch_engine.py [--port 8731] [--out FOLDER] [--allow-origin URL] [--
 | Listens on | `127.0.0.1:8731` only, never your network |
 | Answers | this site, plus pages on `localhost` / `127.0.0.1` (add more with `--allow-origin`) |
 | Saves to | `~/Downloads/RipStitch` by default (change it in **Setup**) |
-| Settings | `%APPDATA%\RipStitch` · `~/Library/Application Support/RipStitch` · `~/.config/ripstitch` |
+| Settings and log | `%APPDATA%\RipStitch` · `~/Library/Application Support/RipStitch` · `~/.config/ripstitch` |
 | Needs | Python 3.10+. yt-dlp is installed for you. FFmpeg is recommended. |
 
 Run it from a clone of this repository and it also serves the app itself at `http://127.0.0.1:8731`. That copy works in every browser, including Safari, which blocks secure websites from reaching apps on your computer.
@@ -82,13 +85,13 @@ Setup in the app covers: output folder, file-name template, container, audio for
 
 ### Security
 
-The engine refuses requests from other websites (it checks the `Origin` header, not just CORS), refuses unexpected `Host` headers (DNS rebinding), keeps file access inside your download folder, and requires a per-run token to read files. It's one readable file: [`docs/engine/ripstitch_engine.py`](docs/engine/ripstitch_engine.py).
+The engine refuses requests from other websites (it checks the `Origin` header, not just CORS), refuses unexpected `Host` headers (DNS rebinding), keeps file access inside your download folder, and requires a per-run token to read files. Engine updates only come from this site's own `engine/` folder over HTTPS, and only when you press **Update the engine**. It's one readable file: [`docs/engine/ripstitch_engine.py`](docs/engine/ripstitch_engine.py).
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| The Rip tab says *Engine offline* | Make sure the engine window is still open. Then press **Retry now**. |
+| The Rip tab says *Engine offline* | Start it again: on Windows use **Start menu → RipStitch Engine → Start the engine**; on macOS / Linux re-run the install line. If you run the script by hand, make sure its window is still open. |
 | *Engine blocked* | Your browser denied local network access. Click the site-settings icon at the left of the address bar, allow it, then retry. |
 | *Engine untrusted* | You're on a different address. Restart the engine with `--allow-origin` and the address it shows. |
 | Only low qualities on YouTube | Install FFmpeg (it merges the separate video and audio) and Deno, then update yt-dlp in **Setup**. |
@@ -102,9 +105,10 @@ docs/                 the website (GitHub Pages serves this folder)
   index.html          one page, both tools
   css/                app.css (design system and shell) · rip.css · stitch.css
   js/                 core.js (routing, palette, toasts) · rip.js · stitch.js · boot.js
-  engine/             ripstitch_engine.py, the local download engine
+  engine/             ripstitch_engine.py (the local download engine) and install.sh
   img/                logo, icons, artwork, screenshots
   sw.js, manifest.webmanifest   offline support and install as an app
+installer/            Windows installer: bundle build script, Inno Setup script, CI smoke test
 tests/                engine unit tests: python -m unittest discover tests
 ```
 

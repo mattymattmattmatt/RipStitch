@@ -6,6 +6,9 @@
 const Rip=(()=>{
 const DEFAULT_BASE='http://127.0.0.1:8731';
 const HOSTED_ENGINE='https://mattymattmattmatt.github.io/RipStitch/engine/ripstitch_engine.py';
+const ENGINE_LATEST='1.1.0';   // keep in step with VERSION in docs/engine/ripstitch_engine.py
+const WIN_SETUP='https://github.com/mattymattmattmatt/RipStitch/releases/download/engine-latest/RipStitch-Setup.exe';
+const WIN_SIZE='100 MB';
 const LOOP=['127.0.0.1','localhost','[::1]'];
 const ACTIVE=['queued','running','merging'];
 const E={base:LS.get('engine.base',null)||DEFAULT_BASE,state:'idle',health:null,token:null,cfg:null,tries:0,timer:0,userAsked:false,wasOnline:false};
@@ -92,47 +95,62 @@ function renderTop(){
 function osGuess(){const p=(navigator.userAgentData?.platform||navigator.platform||navigator.userAgent).toLowerCase();return p.includes('win')?'win':(p.includes('mac')||/iphone|ipad/.test(p))?'mac':'linux'}
 let OS=LS.get('rip.os',null)||osGuess();
 function engineUrl(){return location.protocol==='https:'?new URL('engine/ripstitch_engine.py',location.href).href:HOSTED_ENGINE}
+function installUrl(){return engineUrl().replace(/ripstitch_engine\.py$/,'install.sh')}
 const code=(c,label)=>`<div class="code"><code>${esc(c)}</code><button class="btn sm" data-copy="${esc(c)}" data-tip="Copy">${ic('copy')}${label||'Copy'}</button></div>`;
+const vcmp=(a,b)=>{const x=String(a||'0').split('.').map(Number),y=String(b||'0').split('.').map(Number);for(let i=0;i<3;i++){const d=(x[i]||0)-(y[i]||0);if(d)return d}return 0};
 function renderEngine(){
   const box=$('#rEngine'),h=E.health;
   if(E.state==='online'){
     const notes=[];
+    if(vcmp(h.version,ENGINE_LATEST)<0)notes.push(`<div class="callout info">${ic('spark')}<div><b>Engine update available</b> (${esc(h.version)} → ${ENGINE_LATEST}). It takes a few seconds and keeps your settings and downloads.<br><button class="btn sm rip" data-act="selfupdate">${ic('reset')}Update the engine</button></div></div>`);
     if(!h.ytdlp)notes.push(`<div class="callout bad">${ic('warn')}<div><b>yt-dlp isn’t installed in the engine yet.</b> It does the actual downloading.<br><button class="btn sm rip" data-act="install">${ic('dl')}Install yt-dlp now</button></div></div>`);
-    if(!h.ffmpeg)notes.push(`<div class="callout">${ic('warn')}<div><b>FFmpeg is missing.</b> Without it, sites that split video and audio (YouTube above 720p) only offer lower qualities, and audio conversion, section clips and embedding are off. Install it, then restart the engine.${code(OS==='win'?'winget install -e --id Gyan.FFmpeg':OS==='mac'?'brew install ffmpeg':'sudo apt install ffmpeg')}</div></div>`);
+    if(!h.ffmpeg)notes.push(`<div class="callout">${ic('warn')}<div><b>FFmpeg is missing.</b> Without it, sites that split video and audio (YouTube above 720p) only offer lower qualities, and audio conversion, section clips and embedding are off. ${h.platform==='windows'?'Reinstalling with the <a href="'+WIN_SETUP+'">Windows installer</a> includes it.':'Run the install command from the Rip tab again, or install FFmpeg and restart the engine.'}</div></div>`);
     box.innerHTML=notes.join('');box.style.marginTop=notes.length?'18px':'';
     return;
   }
   box.style.marginTop='';
+  const where=esc(E.base.replace(/^https?:\/\//,''));
   const st={
-    idle:['','Not connected yet',`<button class="btn sm rip" data-act="connect">${ic('plug')}Connect</button>`],
-    checking:['wait','Looking for the engine on '+esc(E.base.replace(/^https?:\/\//,''))+'…',''],
-    offline:['wait','Waiting for the engine on '+esc(E.base.replace(/^https?:\/\//,''))+'. It connects by itself once running.',`<button class="btn sm" data-act="connect">${ic('reset')}Retry now</button>`],
+    idle:['','Not connected yet. Installed already? Press Connect.',`<button class="btn sm rip" data-act="connect">${ic('plug')}Connect</button>`],
+    checking:['wait',`Looking for the engine on ${where}…`,''],
+    offline:['wait',`Waiting for the engine on ${where}. This page connects by itself as soon as it’s running.`,`<button class="btn sm" data-act="connect">${ic('reset')}Retry now</button>`],
     denied:['bad','Your browser is blocking this page from reaching apps on your computer.',`<button class="btn sm" data-act="connect">${ic('reset')}Try again</button>`],
     untrusted:['bad','The engine is running, but it doesn’t trust this site yet.',`<button class="btn sm" data-act="connect">${ic('reset')}Retry</button>`],
   }[E.state];
   const extra=E.state==='denied'?`<div class="callout bad" style="margin:14px 20px 0">${ic('shield')}<div>Click the site-settings icon at the left of the address bar, set <b>Local network access</b> (or “Apps on this device”) to <b>Allow</b>, then press Try again.</div></div>`
     :E.state==='untrusted'?`<div class="callout bad" style="margin:14px 20px 0">${ic('shield')}<div>Restart the engine with this site added:${code((OS==='win'?'py':'python3')+' ripstitch_engine.py --allow-origin '+location.origin)}</div></div>`
-    :E.state==='idle'?`<div class="callout info" style="margin:14px 20px 0">${ic('info')}<div>Already running the engine? Press <b>Connect</b>. Your browser may ask to let this site talk to apps on your device. Choose <b>Allow</b>.</div></div>`:'';
+    :E.state==='idle'&&LS.get('engine.downloaded',0)?`<div class="callout info" style="margin:14px 20px 0">${ic('info')}<div>Installed it? Press <b>Connect</b>. Your browser may ask to let this site talk to apps on your device. Choose <b>Allow</b>.</div></div>`:'';
   const py=OS==='win'?'py':'python3',url=engineUrl();
-  const get=OS==='win'?`irm ${url} -OutFile ripstitch_engine.py; ${py} ripstitch_engine.py`:`curl -fsSLO ${url} && ${py} ripstitch_engine.py`;
+  const sh=`curl -fsSL ${installUrl()} | bash`;
+  const main=OS==='win'?`
+      <div class="rp-get">
+        <a class="btn rip lg rp-dl" href="${WIN_SETUP}" data-act="dlwin">${ic('dl')}<span>Download RipStitch for Windows</span></a>
+        <span class="note">Free · about ${WIN_SIZE} · Windows 10 and 11 · no admin rights needed</span>
+      </div>
+      <div class="rp-steps rp-steps-sm">
+        <div class="rp-step"><div><b>Run RipStitch-Setup.exe and click Install</b><p>Python, yt-dlp, FFmpeg and Deno are all included. If Windows says <i>“Windows protected your PC”</i>, click <b>More info</b> → <b>Run anyway</b>; the installer just isn’t code-signed.</p></div></div>
+        <div class="rp-step"><div><b>That’s it</b><p>The engine starts with Windows from now on, runs quietly in the background and keeps yt-dlp up to date. This page connects by itself.</p></div></div>
+      </div>`:`
+      <div class="rp-steps rp-steps-sm">
+        <div class="rp-step"><div><b>Paste this into Terminal</b><p>It installs anything missing (Python, FFmpeg, Deno), sets up the engine for your user only, and starts it at login.</p>${code(sh)}</div></div>
+        <div class="rp-step"><div><b>That’s it</b><p>The engine runs quietly in the background and keeps yt-dlp up to date. This page connects by itself. To remove it later, run the same line with <span class="mono">-s -- --uninstall</span> after <span class="mono">bash</span>.</p></div></div>
+      </div>`;
   const deps={win:['winget install -e --id Python.Python.3.12','winget install -e --id Gyan.FFmpeg'],mac:['brew install python ffmpeg'],linux:['sudo apt install python3 python3-venv ffmpeg']}[OS];
-  const deno={win:'winget install -e --id DenoLand.Deno',mac:'brew install deno',linux:'curl -fsSL https://deno.land/install.sh | sh'}[OS];
+  const get=OS==='win'?`irm ${url} -OutFile ripstitch_engine.py; ${py} ripstitch_engine.py`:`curl -fsSLO ${url} && ${py} ripstitch_engine.py`;
   box.innerHTML=`<div class="rp-card" id="rCard">
-    <div class="rp-card-h"><div class="badge-ic">${ic('plug')}</div><div><h3>Connect the RipStitch Engine</h3>
-      <p>Browsers can’t download from YouTube and friends on their own. The engine is a small, open helper that runs yt-dlp on your computer, so videos go straight into your Downloads folder and never pass through a server. You set it up once.</p></div></div>
+    <div class="rp-card-h"><div class="badge-ic">${ic('plug')}</div><div><h3>Set up Rip once, then it just works</h3>
+      <p>Browsers can’t download from YouTube and friends on their own, so Rip uses the RipStitch Engine: a small helper that runs yt-dlp on your computer. Videos go straight into your Downloads folder and never pass through anyone’s server.</p></div></div>
     <div class="rp-status"><span class="dot ${st[0]}"></span><span>${st[1]}</span>${st[2]}</div>
     ${extra}
     <div class="rp-os"><span class="label">Your system</span><div class="seg" id="rOs"><button data-os="win" class="${OS==='win'?'on':''}">Windows</button><button data-os="mac" class="${OS==='mac'?'on':''}">macOS</button><button data-os="linux" class="${OS==='linux'?'on':''}">Linux</button></div></div>
-    <div class="rp-steps">
-      <div class="rp-step"><div><b>Install Python and FFmpeg</b> <span class="note" style="display:inline">(skip anything you already have)</span>
-        <p>${OS==='win'?'Run in PowerShell or Windows Terminal:':OS==='mac'?'With <a href="https://brew.sh" target="_blank" rel="noopener">Homebrew</a>:':'On Debian or Ubuntu (use your distro’s package manager otherwise):'}</p>${deps.map(c=>code(c)).join('')}
-        <p style="margin-top:8px">Optional, for full YouTube support: ${code(deno)}</p></div></div>
-      <div class="rp-step"><div><b>Get the engine and start it</b>
-        <p>One line downloads <span class="mono">ripstitch_engine.py</span> and runs it. The first run installs yt-dlp into its own private folder, which takes about 30 seconds.</p>${code(get)}
-        <p style="margin-top:8px">Prefer clicking? <a href="${esc(url)}" download="ripstitch_engine.py">Download the engine</a>, then double-click it or run <span class="mono">${py} ripstitch_engine.py</span> in that folder.</p></div></div>
-      <div class="rp-step"><div><b>Come back here</b><p>This page finds the engine by itself. Keep the engine’s window open while you rip; close it when you’re done.</p></div></div>
-    </div>
-    <div class="rp-card-f">${ic('shield')}<span>The engine listens only on 127.0.0.1, answers only this site, and is a single readable Python file.</span><div class="grow"></div><button class="btn sm flat" data-act="address">${ic('sliders')}Engine address</button></div>
+    ${main}
+    <details class="rp-more"><summary>Other ways: run the Python script yourself</summary>
+      <div class="rp-steps">
+        <div class="rp-step"><div><b>Install Python 3.10+ and FFmpeg</b>${deps.map(c=>code(c)).join('')}</div></div>
+        <div class="rp-step"><div><b>Download the engine and start it</b>${code(get)}<p style="margin-top:8px">Or <a href="${esc(url)}" download="ripstitch_engine.py">download ripstitch_engine.py</a> and run <span class="mono">${py} ripstitch_engine.py</span>. Keep its window open while you rip.</p></div></div>
+      </div>
+    </details>
+    <div class="rp-card-f">${ic('shield')}<span>The engine listens only on 127.0.0.1, answers only this site, and is open source.</span><div class="grow"></div><button class="btn sm flat" data-act="address">${ic('sliders')}Engine address</button></div>
   </div>`;
 }
 $('#rEngine').addEventListener('click',e=>{
@@ -141,6 +159,8 @@ $('#rEngine').addEventListener('click',e=>{
   const a=e.target.closest('[data-act]');if(!a)return;
   if(a.dataset.act==='connect')connect(true);
   else if(a.dataset.act==='install')updateYtdlp();
+  else if(a.dataset.act==='selfupdate')selfUpdate(a);
+  else if(a.dataset.act==='dlwin'){LS.set('engine.downloaded',Date.now());setTimeout(()=>connect(true),1500);toast('Downloading RipStitch-Setup.exe',{kind:'ok',sub:'Run it when it finishes. This page connects by itself once the engine starts.',ms:9000})}
   else if(a.dataset.act==='address'){
     const v=prompt('Engine address (default '+DEFAULT_BASE+'):',E.base);if(v==null)return;
     const b=(v.trim()||DEFAULT_BASE).replace(/\/+$/,'');
@@ -700,6 +720,20 @@ async function openImport(){
   draw();dlg.showModal();
 }
 
+async function selfUpdate(btn){
+  if(btn)btn.disabled=true;
+  const t=toast('Updating the engine…',{ms:0,sub:'Your settings and downloads are kept.'});
+  try{
+    const d=await api('/api/engine-update',{},{timeout:90000});
+    if(!d.updated){t.done(d.note||'The engine is already up to date');return}
+    t.done(`Engine updated to ${d.version}`,{sub:'It’s restarting. This page reconnects by itself.'});
+    E.wasOnline=true;setState('checking');setTimeout(()=>connect(false),1500);
+  }catch(e){
+    if(e.status===404)t.done('This engine is too old to update itself',{kind:'warn',sub:'Install the latest version from the Rip tab once, and it updates itself from then on.',ms:12000});
+    else t.done('Engine update failed',{kind:'err',sub:e.message,ms:12000});
+  }finally{if(btn)btn.disabled=false}
+}
+
 /* ============================================================
    SETTINGS
    ============================================================ */
@@ -729,14 +763,16 @@ function renderSettings(){
       ${sw('embed_subs','Put subtitles inside the video')}
       ${sw('sponsorblock','Cut sponsor segments (SponsorBlock)','Removes community-marked sponsor reads from YouTube videos')}
       ${sw('archive','Skip anything already downloaded','Remembers every video ID it has saved')}
+      ${sw('auto_update','Keep yt-dlp up to date automatically','Checks once a day while nothing is downloading. Sites change often, and new yt-dlp releases keep them working.')}
     </div>
     <div class="sub">Engine</div>
     <dl class="set-info">
       <dt>Address</dt><dd>${esc(E.base)}</dd><dd></dd>
-      <dt>Engine</dt><dd>RipStitch Engine ${esc(h.version)} · Python ${esc(h.python)}</dd><dd></dd>
+      <dt>Engine</dt><dd>RipStitch Engine ${esc(h.version)} · ${esc({'windows-app':'Windows app','script':'installed by script',manual:'Python script'}[h.install]||'Python script')} · Python ${esc(h.python)}</dd><dd>${vcmp(h.version,ENGINE_LATEST)<0?`<button class="btn sm rip" data-sa="selfupdate">${ic('reset')}Update to ${ENGINE_LATEST}</button>`:`<button class="btn sm danger" data-sa="stop" data-tip="Stops it until you next sign in, or until you start it again">${ic('stop')}Stop</button>`}</dd>
       <dt>yt-dlp</dt><dd>${h.ytdlp?esc(h.ytdlp)+(h.runtime==='private'?' · private runtime':''):'<span style="color:var(--cut)">not installed</span>'}</dd><dd><button class="btn sm${h.ytdlp?'':' rip'}" data-sa="update">${ic(h.ytdlp?'reset':'dl')}${h.ytdlp?'Update':'Install'}</button></dd>
       <dt>FFmpeg</dt><dd>${h.ffmpeg?esc(h.ffmpeg_version):'<span style="color:var(--cut)">missing</span>: needed for HD merges, audio conversion and section clips'}</dd><dd></dd>
       <dt>JS runtime</dt><dd>${h.js_runtime?esc(h.js_runtime):'<span style="color:var(--warn)">none</span>: install Deno for full YouTube support'}</dd><dd></dd>
+      ${h.log_file?`<dt>Log</dt><dd>${esc(h.log_file)}</dd><dd></dd>`:''}
     </dl>
     <div id="setOut"></div>`;
   delete $('#dlgSet').dataset.dirty;
@@ -746,7 +782,20 @@ function openSettings(){
   renderSettings();$('#setMsg').textContent='';$('#dlgSet').showModal();
 }
 $('#setBody').addEventListener('input',()=>{$('#dlgSet').dataset.dirty='1'});
-$('#setBody').addEventListener('click',e=>{const b=e.target.closest('[data-sa]');if(!b)return;if(b.dataset.sa==='reveal')api('/api/reveal',{}).catch(err=>toast(err.message,{kind:'err'}));else updateYtdlp(b)});
+$('#setBody').addEventListener('click',async e=>{
+  const b=e.target.closest('[data-sa]');if(!b)return;
+  const a=b.dataset.sa;
+  if(a==='reveal')return api('/api/reveal',{}).catch(err=>toast(err.message,{kind:'err'}));
+  if(a==='selfupdate'){$('#dlgSet').close();return selfUpdate()}
+  if(a==='stop'){
+    if(R.jobs.some(j=>ACTIVE.includes(j.status))&&!confirm('Downloads are still running. Stop the engine anyway?'))return;
+    try{await api('/api/shutdown',{})}catch{}
+    $('#dlgSet').close();E.wasOnline=true;setState('offline');setTimeout(()=>connect(false),3000);
+    const how={'windows-app':'It starts again the next time you sign in, or from “Start the engine” in your Start menu.',script:'It starts again the next time you log in.'}[E.health?.install]||'Run ripstitch_engine.py again to restart it.';
+    return toast('Engine stopped',{sub:how});
+  }
+  updateYtdlp(b);
+});
 $('#setSave').onclick=async()=>{
   const cfg={};
   $$('#setBody [data-k]').forEach(el=>{const k=el.dataset.k;cfg[k]=el.type==='checkbox'?el.checked:el.type==='number'?+el.value:el.value.trim()});
