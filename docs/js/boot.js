@@ -14,7 +14,7 @@
   Rip.init();
   if(shared)Rip.read(shared);
 
-  if('serviceWorker'in navigator&&(location.protocol==='https:'||['127.0.0.1','localhost'].includes(location.hostname))){
+  if(!DESKTOP&&'serviceWorker'in navigator&&(location.protocol==='https:'||['127.0.0.1','localhost'].includes(location.hostname))){
     addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
   }
   console.log('%cRip%cStitch','font:800 22px system-ui;color:#ff7a22','font:800 22px system-ui;color:#ffd21e','\n· Matty P from I.T.');

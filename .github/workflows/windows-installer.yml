@@ -1,13 +1,15 @@
-name: Windows installer
+name: Windows builds
 
-# Builds RipStitch-Setup.exe (engine + Python + yt-dlp + FFmpeg + Deno), installs it on a clean
-# Windows runner and runs real downloads through it, then publishes it to the "engine-latest"
-# release so the website's download button always points at a tested build.
+# One bundle (Python + yt-dlp + FFmpeg + Deno + engine), two products, each tested on a clean
+# Windows runner before it's published:
+#   RipStitch-Setup.exe  installs the background engine for the website   -> release "engine-latest"
+#   RipStitch.exe        standalone desktop app with its own window       -> release "desktop-latest"
 on:
   push:
     paths:
-      - 'docs/engine/**'
+      - 'docs/**'
       - 'installer/**'
+      - 'desktop/**'
       - '.github/workflows/windows-installer.yml'
   workflow_dispatch:
 
@@ -15,22 +17,42 @@ permissions:
   contents: write
 
 concurrency:
-  group: windows-installer-${{ github.ref }}
+  group: windows-builds-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: pwsh
+
 jobs:
-  build:
+  bundle:
     runs-on: windows-latest
-    timeout-minutes: 40
-    defaults:
-      run:
-        shell: pwsh
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
       - name: Assemble the bundle
         run: ./installer/build-windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle
+          path: build/RipStitch
+          compression-level: 1
+          retention-days: 2
 
+  installer:
+    needs: bundle
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: bundle
+          path: build/RipStitch
+      - name: Read the engine version
+        run: |
+          $v = (Get-Content build\RipStitch\installed.json -Raw | ConvertFrom-Json).engine
+          "RS_VERSION=$v" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Build the installer
         run: |
           $iscc = Get-Command iscc.exe -ErrorAction SilentlyContinue
@@ -43,38 +65,70 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $f = Get-Item dist\RipStitch-Setup.exe
           "Installer: {0:N1} MB" -f ($f.Length / 1MB)
-          "SHA256: " + (Get-FileHash $f -Algorithm SHA256).Hash
-
       - name: Install it and run real downloads
         run: ./installer/smoke-test.ps1
-
       - uses: actions/upload-artifact@v4
         with:
           name: RipStitch-Setup
           path: dist/RipStitch-Setup.exe
           retention-days: 14
-
       - name: Publish to the engine-latest release
         if: github.ref_name == github.event.repository.default_branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'engine-latest'
           $hash = (Get-FileHash dist\RipStitch-Setup.exe -Algorithm SHA256).Hash.ToLower()
           $notes = @"
-          **RipStitch Engine $env:RS_VERSION for Windows**: everything Rip needs in one installer (Python, yt-dlp, FFmpeg, Deno).
+          **RipStitch Engine $env:RS_VERSION for Windows**: everything the website's Rip tab needs in one installer (Python, yt-dlp, FFmpeg, Deno).
 
           1. Download **RipStitch-Setup.exe** below and run it. No admin rights needed.
           2. If Windows SmartScreen says *Windows protected your PC*, click **More info** and then **Run anyway**. The installer isn't code-signed.
           3. That's it. The engine starts with Windows, runs in the background and keeps yt-dlp up to date. Open https://mattymattmattmatt.github.io/RipStitch/ and paste a link.
 
           Built from $env:GITHUB_SHA and tested on a clean Windows runner. SHA-256: ``$hash``
-          "@ -replace '(?m)^ {10}', ''
-          gh release view $tag *> $null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $tag dist\RipStitch-Setup.exe --title 'RipStitch for Windows' --notes $notes --target $env:GITHUB_SHA --latest
-          } else {
-            gh release upload $tag dist\RipStitch-Setup.exe --clobber
-            gh release edit $tag --notes $notes --title 'RipStitch for Windows'
-          }
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "@
+          ./installer/publish.ps1 -Tag engine-latest -File dist\RipStitch-Setup.exe -Title 'RipStitch Engine for Windows (for the website)' -Notes $notes -Latest
+
+  desktop:
+    needs: bundle
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: bundle
+          path: build/RipStitch
+      - name: Build RipStitch.exe
+        run: ./installer/build-desktop.ps1
+      - name: Launch it and run real downloads
+        run: ./installer/smoke-desktop.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-screenshots
+          path: dist/desktop-smoke
+          retention-days: 14
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RipStitch-desktop
+          path: dist/RipStitch.exe
+          retention-days: 14
+      - name: Publish to the desktop-latest release
+        if: github.ref_name == github.event.repository.default_branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $hash = (Get-FileHash dist\RipStitch.exe -Algorithm SHA256).Hash.ToLower()
+          $v = (Get-Content build\RipStitch\installed.json -Raw | ConvertFrom-Json).engine
+          $notes = @"
+          **RipStitch for Windows: the standalone desktop app.** Rip and Stitch in their own window. No browser, no install, everything built in.
+
+          1. Download **RipStitch.exe** below and double-click it. Keep it anywhere, e.g. your Desktop.
+          2. If Windows SmartScreen says *Windows protected your PC*, click **More info** and then **Run anyway**. The app isn't code-signed.
+          3. The first launch unpacks its engine (about 30 seconds). After that it opens in a couple of seconds.
+
+          Needs Windows 10 or 11 (64-bit) with the Microsoft Edge WebView2 Runtime, which Windows already includes. Engine $v, built from $env:GITHUB_SHA and tested on a clean Windows runner. SHA-256: ``$hash``
+          "@
+          ./installer/publish.ps1 -Tag desktop-latest -File dist\RipStitch.exe -Title 'RipStitch Desktop for Windows (standalone app)' -Notes $notes

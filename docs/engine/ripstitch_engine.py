@@ -53,6 +53,8 @@ NO_WINDOW = {"creationflags": 0x08000000} if IS_WIN else {}  # CREATE_NO_WINDOW
 # paths & config
 # --------------------------------------------------------------------------
 def config_dir() -> Path:
+    if os.environ.get("RIPSTITCH_HOME"):          # the desktop app keeps its own settings and history
+        return Path(os.environ["RIPSTITCH_HOME"])
     if IS_WIN:
         base = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
         return base / "RipStitch"
@@ -1548,7 +1550,7 @@ def main():
             sys.exit(0 if RUNTIME["py"] else 1)
 
     here = ENGINE_PATH.parent
-    for cand in (here.parent, here):
+    for cand in (APP_DIR / "site", here.parent, here):
         if (cand / "index.html").is_file() and (cand / "js").is_dir():
             SITE_DIR = cand.resolve()
             break

@@ -42,9 +42,26 @@ if ($h.install -ne 'windows-app') { Fail "install kind is '$($h.install)'" }
 
 Write-Host '== serve a test clip'
 & (Join-Path $app 'bin\ffmpeg.exe') -hide_banner -loglevel error -y -f lavfi -i 'testsrc2=size=1280x720:rate=30' -f lavfi -i 'sine=frequency=440:sample_rate=48000' -t 8 -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest "$work\clip.mp4"
+# Python's server for whole-file downloads; Node's http-server for the section clip (FFmpeg needs byte ranges).
+Start-Process python -ArgumentList '-m', 'http.server', '9101', '--bind', '127.0.0.1', '--directory', $work -WindowStyle Hidden
 Start-Process npx.cmd -ArgumentList '--yes', 'http-server', $work, '-p', '9100', '-a', '127.0.0.1', '-s' -WindowStyle Hidden
-for ($i = 0; $i -lt 60; $i++) { try { Invoke-WebRequest 'http://127.0.0.1:9100/clip.mp4' -Method Head -TimeoutSec 3 | Out-Null; break } catch { Start-Sleep 1 } }
-$clip = 'http://127.0.0.1:9100/clip.mp4'
+foreach ($u in 'http://127.0.0.1:9101/clip.mp4', 'http://127.0.0.1:9100/clip.mp4') {
+  for ($i = 0; $i -lt 90; $i++) { try { Invoke-WebRequest $u -Method Head -TimeoutSec 3 | Out-Null; break } catch { Start-Sleep 1 } }
+}
+$clip = 'http://127.0.0.1:9101/clip.mp4'
+$rangeClip = 'http://127.0.0.1:9100/clip.mp4'
+
+function Diagnose($url) {
+  Write-Host '--- diagnostics'
+  "  source clip: {0:N0} bytes" -f (Get-Item "$work\clip.mp4").Length
+  Get-ChildItem "$env:USERPROFILE\Downloads\RipStitch" -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { "  {0,12:N0}  {1}" -f $_.Length, $_.Name }
+  $f = Get-ChildItem "$env:USERPROFILE\Downloads\RipStitch" -Filter '*.mp4' -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($f) { '  first bytes: ' + ((Get-Content $f.FullName -AsByteStream -TotalCount 24 | ForEach-Object { $_.ToString('x2') }) -join ' ') }
+  try { (Invoke-WebRequest $url -Method Head).Headers.GetEnumerator() | ForEach-Object { "  header $($_.Key): $($_.Value)" } } catch { "  HEAD failed: $_" }
+  Write-Host '--- yt-dlp -v on the same link'
+  & (Join-Path $app 'python\python.exe') -m yt_dlp -v --no-colors --no-part -o "$work\diag.%(ext)s" $url 2>&1 | Select-Object -Last 25
+  Get-ChildItem "$work\diag.*" -ErrorAction SilentlyContinue | ForEach-Object { "  diag download: {0:N0} bytes {1}" -f $_.Length, $_.Name }
+}
 
 Write-Host '== probe + downloads'
 $r = (Post '/api/probe' @{ url = $clip }).result
@@ -52,7 +69,7 @@ Write-Host "  probe: $($r.title) via $($r.extractor), $($r.formats.Count) format
 $ids = @()
 $ids += (Post '/api/enqueue' @{ mode = 'quick'; quality = 'best'; label = 'best'; items = @(@{ url = $clip; title = 'best' }) }).ids
 $ids += (Post '/api/enqueue' @{ mode = 'quick'; quality = 'audio'; label = 'audio'; items = @(@{ url = $clip; title = 'audio' }) }).ids
-$ids += (Post '/api/enqueue' @{ mode = 'quick'; quality = 'best'; label = 'section'; section = @{ start = 2; end = 5 }; items = @(@{ url = $clip; title = 'section' }) }).ids
+$ids += (Post '/api/enqueue' @{ mode = 'quick'; quality = 'best'; label = 'section'; section = @{ start = 2; end = 5 }; items = @(@{ url = $rangeClip; title = 'section' }) }).ids
 $deadline = (Get-Date).AddMinutes(4)
 do {
   Start-Sleep 2
@@ -63,6 +80,7 @@ foreach ($j in $jobs) {
   Write-Host ("  {0,-8} {1,-9} {2,10:N0} bytes  {3}" -f $j.label, $j.status, $j.size, $j.filename)
   if ($j.status -ne 'done' -or -not $j.file_ok) {
     (Invoke-RestMethod "$api/api/log/$($j.id)").log | Select-Object -Last 25 | ForEach-Object { Write-Host "    $($_.level): $($_.msg)" }
+    Diagnose ($(if ($j.label -eq 'section') { $rangeClip } else { $clip }))
     Fail "download '$($j.label)' ended as $($j.status): $($j.error)"
   }
 }

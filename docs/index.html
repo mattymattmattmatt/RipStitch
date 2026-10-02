@@ -412,13 +412,14 @@
       <img class="mark" src="img/logo.svg" alt="">
       <h2>Rip<span style="background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent">Stitch</span></h2>
       <p><b style="color:var(--rip)">Rip</b> reads a link and grabs the video or audio you pick, using yt-dlp through a small engine on your own computer. <b style="color:var(--hv)">Stitch</b> trims and joins clips into one cut, right here in the browser, and exports a video or a lossless FFmpeg script.</p>
+      <p class="web-only" style="font-size:12.5px">On Windows? There’s also a <a href="https://github.com/mattymattmattmatt/RipStitch/releases/download/desktop-latest/RipStitch.exe">standalone desktop app</a>: Rip and Stitch in their own window, nothing to install.</p>
       <div class="pills"><span class="chip">No uploads</span><span class="chip">No accounts</span><span class="chip">Works offline</span><span class="chip">Open source</span></div>
-      <div class="bmk"><a class="btn rip" id="bBmk" href="#" draggable="true"><svg class="ic"><use href="#i-bolt"/></svg>Rip with RipStitch</a><span class="note">Drag this button to your bookmarks bar. Click it on any video page and it opens here, already reading the link.</span></div>
+      <div class="bmk web-only"><a class="btn rip" id="bBmk" href="#" draggable="true"><svg class="ic"><use href="#i-bolt"/></svg>Rip with RipStitch</a><span class="note">Drag this button to your bookmarks bar. Click it on any video page and it opens here, already reading the link.</span></div>
       <p style="font-size:12px">Only download what you have the right to. Respect creators and each site's terms.</p>
       <p class="mono" style="font-size:10.5px;letter-spacing:.14em;color:var(--faint)">MATTY P FROM I.T.</p>
     </div>
   </div>
-  <div class="df"><a class="btn flat" href="https://github.com/mattymattmattmatt/RipStitch" target="_blank" rel="noopener"><svg class="ic"><use href="#i-github"/></svg>Source</a><button class="btn flat" id="bInstall" hidden><svg class="ic"><use href="#i-install"/></svg>Install as an app</button><div class="grow"></div><button class="btn" data-close>Close</button></div>
+  <div class="df"><a class="btn flat" href="https://github.com/mattymattmattmatt/RipStitch" target="_blank" rel="noopener"><svg class="ic"><use href="#i-github"/></svg>Source</a><button class="btn flat web-only" id="bInstall" hidden><svg class="ic"><use href="#i-install"/></svg>Install as an app</button><div class="grow"></div><button class="btn" data-close>Close</button></div>
 </dialog>
 
 <div class="toasts" id="toasts" aria-live="polite"></div>

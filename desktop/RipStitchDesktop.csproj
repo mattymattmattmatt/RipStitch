@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- RipStitch desktop app: a native window (Edge WebView2) around the RipStitch site, with its own
+       private engine. Everything it needs (Python, yt-dlp, FFmpeg, Deno, the site) is embedded as
+       payload.zip and unpacked to %LOCALAPPDATA%\RipStitch\Desktop on first launch.
+       Build with installer\build-desktop.ps1. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>RipStitch</AssemblyName>
+    <RootNamespace>RipStitch</RootNamespace>
+    <ApplicationIcon>..\installer\ripstitch.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.1.0</Version>
+    <Product>RipStitch</Product>
+    <Company>Matty P from I.T.</Company>
+    <Description>RipStitch: rip videos, stitch them together</Description>
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>false</GenerateBindingRedirectsOutputType>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.*" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.IO.Compression" />
+  </ItemGroup>
+  <ItemGroup Condition="Exists('payload.zip')">
+    <EmbeddedResource Include="payload.zip" LogicalName="payload.zip" />
+  </ItemGroup>
+  <ItemGroup Condition="Exists('build.txt')">
+    <EmbeddedResource Include="build.txt" LogicalName="build.txt" />
+  </ItemGroup>
+</Project>

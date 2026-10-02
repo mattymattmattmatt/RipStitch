@@ -2,3 +2,9 @@ __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
+build/
+dist/
+desktop/bin/
+desktop/obj/
+desktop/payload.zip
+desktop/build.txt

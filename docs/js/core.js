@@ -15,6 +15,9 @@ const pad2=n=>String(n).padStart(2,'0');
 const plural=(n,w,p)=>`${n} ${n===1?w:(p||w+'s')}`;
 const IS_MAC=/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent);
 const MOD=IS_MAC?'⌘':'Ctrl';
+/** Running inside the RipStitch desktop app (its window adds this to the user agent). */
+const DESKTOP=/RipStitchDesktop/.test(navigator.userAgent);
+if(DESKTOP)document.documentElement.classList.add('desktop');
 const LS={
   get(k,d){try{const v=localStorage.getItem('rs.'+k);return v==null?d:JSON.parse(v)}catch{return d}},
   set(k,v){try{localStorage.setItem('rs.'+k,JSON.stringify(v))}catch{}},

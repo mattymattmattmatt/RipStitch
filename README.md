@@ -31,11 +31,13 @@ The tools talk to each other: a finished download is one click (or zero, with **
 
 Either way the engine starts by itself when you sign in, runs quietly in the background, updates yt-dlp once a day, and the site offers a one-click update when a newer engine is published. If your browser asks whether the site may talk to apps on your device, choose **Allow**.
 
+**Prefer a normal program?** [**RipStitch Desktop for Windows**](https://github.com/mattymattmattmatt/RipStitch/releases/download/desktop-latest/RipStitch.exe) is a single `RipStitch.exe` with Rip and Stitch in their own window. There's no browser and nothing to install, and its engine is built in. The first launch unpacks it to `%LOCALAPPDATA%\RipStitch\Desktop` (about 30 seconds); after that it opens in a couple of seconds. It keeps its own settings and history, separate from the website's engine, and both can run side by side. It uses the Edge WebView2 runtime that ships with Windows 10 and 11.
+
 To remove it: on Windows use **Settings → Apps → RipStitch Engine**; on macOS / Linux run the same line with `-s -- --uninstall` after `bash`. Your downloads and settings are kept.
 
 Prefer to run it by hand? Install Python 3.10+ and FFmpeg, download [`ripstitch_engine.py`](docs/engine/ripstitch_engine.py) and run `python3 ripstitch_engine.py` (`py` on Windows). It installs yt-dlp into its own private folder on first run.
 
-The Windows installer is built and tested by [a GitHub Actions workflow](.github/workflows/windows-installer.yml): it installs on a clean Windows machine, runs real downloads through it, and only then publishes it.
+Both Windows downloads are built and tested by [a GitHub Actions workflow](.github/workflows/windows-installer.yml). On a clean Windows machine it installs or launches each one, runs real downloads through it, and only then publishes it.
 
 ## Publishing on GitHub Pages
 
@@ -108,6 +110,7 @@ docs/                 the website (GitHub Pages serves this folder)
   engine/             ripstitch_engine.py (the local download engine) and install.sh
   img/                logo, icons, artwork, screenshots
   sw.js, manifest.webmanifest   offline support and install as an app
+desktop/              RipStitch Desktop: a small C# window (WebView2) around the site, with a private engine
 installer/            Windows installer: bundle build script, Inno Setup script, CI smoke test
 tests/                engine unit tests: python -m unittest discover tests
 ```

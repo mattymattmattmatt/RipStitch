@@ -8,7 +8,8 @@ const DEFAULT_BASE='http://127.0.0.1:8731';
 const HOSTED_ENGINE='https://mattymattmattmatt.github.io/RipStitch/engine/ripstitch_engine.py';
 const ENGINE_LATEST='1.1.0';   // keep in step with VERSION in docs/engine/ripstitch_engine.py
 const WIN_SETUP='https://github.com/mattymattmattmatt/RipStitch/releases/download/engine-latest/RipStitch-Setup.exe';
-const WIN_SIZE='100 MB';
+const WIN_SIZE='95 MB';
+const DESKTOP_EXE='https://github.com/mattymattmattmatt/RipStitch/releases/download/desktop-latest/RipStitch.exe';
 const LOOP=['127.0.0.1','localhost','[::1]'];
 const ACTIVE=['queued','running','merging'];
 const E={base:LS.get('engine.base',null)||DEFAULT_BASE,state:'idle',health:null,token:null,cfg:null,tries:0,timer:0,userAsked:false,wasOnline:false};
@@ -102,7 +103,7 @@ function renderEngine(){
   const box=$('#rEngine'),h=E.health;
   if(E.state==='online'){
     const notes=[];
-    if(vcmp(h.version,ENGINE_LATEST)<0)notes.push(`<div class="callout info">${ic('spark')}<div><b>Engine update available</b> (${esc(h.version)} → ${ENGINE_LATEST}). It takes a few seconds and keeps your settings and downloads.<br><button class="btn sm rip" data-act="selfupdate">${ic('reset')}Update the engine</button></div></div>`);
+    if(vcmp(h.version,ENGINE_LATEST)<0&&h.install!=='desktop')notes.push(`<div class="callout info">${ic('spark')}<div><b>Engine update available</b> (${esc(h.version)} → ${ENGINE_LATEST}). It takes a few seconds and keeps your settings and downloads.<br><button class="btn sm rip" data-act="selfupdate">${ic('reset')}Update the engine</button></div></div>`);
     if(!h.ytdlp)notes.push(`<div class="callout bad">${ic('warn')}<div><b>yt-dlp isn’t installed in the engine yet.</b> It does the actual downloading.<br><button class="btn sm rip" data-act="install">${ic('dl')}Install yt-dlp now</button></div></div>`);
     if(!h.ffmpeg)notes.push(`<div class="callout">${ic('warn')}<div><b>FFmpeg is missing.</b> Without it, sites that split video and audio (YouTube above 720p) only offer lower qualities, and audio conversion, section clips and embedding are off. ${h.platform==='windows'?'Reinstalling with the <a href="'+WIN_SETUP+'">Windows installer</a> includes it.':'Run the install command from the Rip tab again, or install FFmpeg and restart the engine.'}</div></div>`);
     box.innerHTML=notes.join('');box.style.marginTop=notes.length?'18px':'';
@@ -127,6 +128,7 @@ function renderEngine(){
         <a class="btn rip lg rp-dl" href="${WIN_SETUP}" data-act="dlwin">${ic('dl')}<span>Download RipStitch for Windows</span></a>
         <span class="note">Free · about ${WIN_SIZE} · Windows 10 and 11 · no admin rights needed</span>
       </div>
+      <p class="note" style="padding:2px 20px 0">Rather have a standalone program? <a href="${DESKTOP_EXE}">Get RipStitch Desktop</a>: Rip and Stitch in their own window, nothing to install, no browser needed.</p>
       <div class="rp-steps rp-steps-sm">
         <div class="rp-step"><div><b>Run RipStitch-Setup.exe and click Install</b><p>Python, yt-dlp, FFmpeg and Deno are all included. If Windows says <i>“Windows protected your PC”</i>, click <b>More info</b> → <b>Run anyway</b>; the installer just isn’t code-signed.</p></div></div>
         <div class="rp-step"><div><b>That’s it</b><p>The engine starts with Windows from now on, runs quietly in the background and keeps yt-dlp up to date. This page connects by itself.</p></div></div>
@@ -768,7 +770,7 @@ function renderSettings(){
     <div class="sub">Engine</div>
     <dl class="set-info">
       <dt>Address</dt><dd>${esc(E.base)}</dd><dd></dd>
-      <dt>Engine</dt><dd>RipStitch Engine ${esc(h.version)} · ${esc({'windows-app':'Windows app','script':'installed by script',manual:'Python script'}[h.install]||'Python script')} · Python ${esc(h.python)}</dd><dd>${vcmp(h.version,ENGINE_LATEST)<0?`<button class="btn sm rip" data-sa="selfupdate">${ic('reset')}Update to ${ENGINE_LATEST}</button>`:`<button class="btn sm danger" data-sa="stop" data-tip="Stops it until you next sign in, or until you start it again">${ic('stop')}Stop</button>`}</dd>
+      <dt>Engine</dt><dd>RipStitch Engine ${esc(h.version)} · ${esc({'windows-app':'Windows app','script':'installed by script',desktop:'built into RipStitch Desktop',manual:'Python script'}[h.install]||'Python script')} · Python ${esc(h.python)}</dd><dd>${h.install==='desktop'?'':vcmp(h.version,ENGINE_LATEST)<0?`<button class="btn sm rip" data-sa="selfupdate">${ic('reset')}Update to ${ENGINE_LATEST}</button>`:`<button class="btn sm danger" data-sa="stop" data-tip="Stops it until you next sign in, or until you start it again">${ic('stop')}Stop</button>`}</dd>
       <dt>yt-dlp</dt><dd>${h.ytdlp?esc(h.ytdlp)+(h.runtime==='private'?' · private runtime':''):'<span style="color:var(--cut)">not installed</span>'}</dd><dd><button class="btn sm${h.ytdlp?'':' rip'}" data-sa="update">${ic(h.ytdlp?'reset':'dl')}${h.ytdlp?'Update':'Install'}</button></dd>
       <dt>FFmpeg</dt><dd>${h.ffmpeg?esc(h.ffmpeg_version):'<span style="color:var(--cut)">missing</span>: needed for HD merges, audio conversion and section clips'}</dd><dd></dd>
       <dt>JS runtime</dt><dd>${h.js_runtime?esc(h.js_runtime):'<span style="color:var(--warn)">none</span>: install Deno for full YouTube support'}</dd><dd></dd>
@@ -842,8 +844,8 @@ const inRip=fn=>()=>{App.go('rip');setTimeout(fn,30)};
 ].forEach(c=>App.cmd({group:'Rip',...c}));
 App.cmd({id:'hp.keys',group:'Help',title:'Keyboard shortcuts',icon:'keys',keys:['?'],run:openKeys});
 App.cmd({id:'hp.about',group:'Help',title:'About RipStitch',icon:'info',run:openAbout});
-App.cmd({id:'hp.install',group:'Help',title:'Install RipStitch as an app',icon:'install',when:()=>!!installEvt,run:()=>$('#bInstall').click()});
-App.cmd({id:'hp.engine',group:'Help',title:'Download the engine (ripstitch_engine.py)',icon:'dl',run:()=>{const a=document.createElement('a');a.href=engineUrl();a.download='ripstitch_engine.py';a.click()}});
+App.cmd({id:'hp.install',group:'Help',title:'Install RipStitch as an app',icon:'install',when:()=>!!installEvt&&!DESKTOP,run:()=>$('#bInstall').click()});
+App.cmd({id:'hp.engine',group:'Help',title:'Download the engine (ripstitch_engine.py)',icon:'dl',when:()=>!DESKTOP,run:()=>{const a=document.createElement('a');a.href=engineUrl();a.download='ripstitch_engine.py';a.click()}});
 
 /* ============================================================
    LIFECYCLE
