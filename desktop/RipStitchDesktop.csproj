@@ -12,7 +12,7 @@
     <RootNamespace>RipStitch</RootNamespace>
     <ApplicationIcon>..\installer\ripstitch.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Product>RipStitch</Product>
     <Company>Matty P from I.T.</Company>
     <Description>RipStitch: rip videos, stitch them together</Description>

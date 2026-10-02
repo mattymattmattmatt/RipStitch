@@ -93,6 +93,37 @@ class ArgvTests(unittest.TestCase):
             yt_dlp.parse_options(self.argv(v, **cfg))
 
 
+class NamingTests(unittest.TestCase):
+    def tmpl(self, spec, **cfg):
+        a = eng.download_argv(dict({"url": "https://x"}, **spec), dict(CFG, **cfg), True, home="/tmp/work/1")
+        self.assertEqual(a[a.index("-P") + 1], "/tmp/work/1")
+        return a[a.index("-o") + 1]
+
+    def test_best_and_audio_keep_the_plain_name(self):
+        self.assertEqual(self.tmpl({"mode": "quick", "quality": "best"}), CFG["template"])
+        self.assertEqual(self.tmpl({"mode": "quick", "quality": "audio"}), CFG["template"])
+
+    def test_resolution_and_format_are_tagged(self):
+        self.assertTrue(self.tmpl({"mode": "quick", "quality": "1920", "label": "1080p"}).endswith(" [1080p].%(ext)s"))
+        self.assertTrue(self.tmpl({"mode": "quick", "quality": "720"}).endswith(" [720p].%(ext)s"))
+        self.assertTrue(self.tmpl({"mode": "format", "format_id": "137"}).endswith(" [f137].%(ext)s"))
+
+    def test_finish_never_overwrites(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "out"; work = Path(d) / "work"
+            (work / "sub").mkdir(parents=True); out.mkdir()
+            (out / "a.mp4").write_text("old")
+            (work / "a.mp4").write_text("new")
+            (work / "sub" / "b.mp4").write_text("b")
+            (work / "c.mp4.part").write_text("partial")
+            dest = eng.finish_files(work, out, str(work / "a.mp4"))
+            self.assertEqual(Path(dest).name, "a (2).mp4")
+            self.assertEqual((out / "a.mp4").read_text(), "old")
+            self.assertTrue((out / "sub" / "b.mp4").exists())
+            self.assertFalse((out / "c.mp4.part").exists())
+
+
 class SummaryTests(unittest.TestCase):
     def test_video_summary_drops_storyboards_and_flags_merges(self):
         info = {"id": "a", "title": "T", "extractor_key": "Youtube", "duration": 10, "formats": [

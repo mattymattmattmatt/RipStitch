@@ -38,7 +38,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 DEFAULT_PORT = 8731
 APP_URL = os.environ.get("RIPSTITCH_APP_URL") or "https://mattymattmattmatt.github.io/RipStitch/"
 TRUSTED_ORIGINS = {"https://mattymattmattmatt.github.io"}
@@ -549,6 +549,7 @@ class Job:
         self.note = None
         self.cancel = False
         self.bytes_done_streams = 0
+        self.work = getattr(self, "work", None)   # kept across retries so .part files resume
 
     def add_log(self, level, msg):
         msg = (msg or "").rstrip()
@@ -677,13 +678,16 @@ class Manager:
     def remove(self, jid):
         self.cancel(jid)
         with self.cv:
-            self.jobs.pop(jid, None)
+            j = self.jobs.pop(jid, None)
+        if j:
+            drop_work(j)
         self.save_soon()
 
     def clear(self):
         with self.cv:
-            for jid in [k for k, j in self.jobs.items() if j.status in TERMINAL]:
-                del self.jobs[jid]
+            gone = [self.jobs.pop(k) for k in [k for k, j in self.jobs.items() if j.status in TERMINAL]]
+        for j in gone:
+            drop_work(j)
         self.save_soon()
 
     def running(self):
@@ -735,7 +739,16 @@ class Manager:
         except OSError as e:
             j.status, j.error = "error", f"can't create output folder: {e}"
             return
-        argv = download_argv(j.spec, cfg, TOOLS["ffmpeg"])
+        # Each download works in its own folder and only moves its finished file into place,
+        # so two grabs of the same video (or video + audio) can never clobber each other.
+        work = Path(j.work) if j.work else work_root(cfg["out_dir"]) / j.id
+        try:
+            work.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            j.status, j.error = "error", f"can't create a work folder: {e}"
+            return
+        j.work = str(work)
+        argv = download_argv(j.spec, cfg, TOOLS["ffmpeg"], home=str(work))
         j.add_log("info", f"yt-dlp {RUNTIME['ytdlp']} · {' '.join(argv)}")
         proc = spawn_worker({"action": "download", "url": j.url, "argv": argv})
         j.proc = proc
@@ -801,12 +814,76 @@ class Manager:
             j.add_log("warn", "Stopped by you. Retry resumes where it left off.")
             return
         if code == 0 and (j.dest or j.note):
+            try:
+                j.dest = finish_files(Path(j.work), Path(cfg["out_dir"]), j.dest)
+            except OSError as e:
+                j.status, j.error = "error", f"downloaded, but couldn't move it into place: {e}"
+                return
+            drop_work(j)
             j.status, j.pct, j.stage = "done", 100.0, ""
             if j.dest and os.path.isfile(j.dest):
                 j.size = os.path.getsize(j.dest)
             return
         j.status = "error"
         j.error = friendly_error(last_err or f"yt-dlp exited with code {code}")
+
+
+WORK_NAME = ".ripstitch-work"
+
+
+def work_root(out_dir: str) -> Path:
+    root = Path(out_dir) / WORK_NAME
+    if not root.is_dir():
+        root.mkdir(parents=True, exist_ok=True)
+        if IS_WIN:
+            try:
+                import ctypes
+                ctypes.windll.kernel32.SetFileAttributesW(str(root), 0x02)  # hidden
+            except Exception:
+                pass
+    return root
+
+
+def unique_path(p: Path) -> Path:
+    if not p.exists():
+        return p
+    n = 2
+    while True:
+        q = p.with_name(f"{p.stem} ({n}){p.suffix}")
+        if not q.exists():
+            return q
+        n += 1
+
+
+def finish_files(work: Path, out_dir: Path, main: str | None) -> str | None:
+    """Move everything a job produced from its work folder into the download folder. Never overwrites."""
+    moved = None
+    main_p = Path(main).resolve() if main else None
+    for f in sorted(work.rglob("*")):
+        if not f.is_file() or f.name.endswith((".part", ".ytdl", ".temp")) or ".part-Frag" in f.name:
+            continue
+        target = unique_path(out_dir / f.relative_to(work))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(f, target) if f.stat().st_dev == out_dir.stat().st_dev else shutil.move(str(f), str(target))
+        if main_p and f.resolve() == main_p:
+            moved = str(target)
+    return moved or main
+
+
+def drop_work(j) -> None:
+    if j.work:
+        shutil.rmtree(j.work, ignore_errors=True)
+        j.work = None
+
+
+def tidy_work(out_dir: str, keep: set) -> None:
+    """At start-up, remove work folders left by downloads that are no longer in the list."""
+    root = Path(out_dir) / WORK_NAME
+    if not root.is_dir():
+        return
+    for d in root.iterdir():
+        if d.is_dir() and d.name not in keep:
+            shutil.rmtree(d, ignore_errors=True)
 
 
 def friendly_error(msg: str) -> str:
@@ -869,18 +946,33 @@ def clock_tag(sec: float) -> str:
     return f"{h}h{m:02d}m{x:02d}s" if h else f"{m}m{x:02d}s"
 
 
-def download_argv(spec: dict, cfg: dict, ffmpeg: bool) -> list:
+def name_tags(spec: dict, ffmpeg: bool) -> str:
+    """Suffixes that keep different grabs of the same video apart: [720p], [f137], [1m05s-2m10s]."""
+    tags = []
+    q = str(spec.get("quality") or "best")
+    if spec.get("mode") == "format" and spec.get("format_id"):
+        tags.append("f" + re.sub(r"[^\w-]", "", str(spec["format_id"])))
+    elif q.isdigit():
+        m = re.match(r"\s*(\d{3,4}p)", str(spec.get("label") or ""))
+        tags.append(m.group(1) if m else q + "p")
+    sec = spec.get("section")
+    if sec and ffmpeg:
+        tags.append(f"{clock_tag(sec['start'])}-{clock_tag(sec['end'])}")
+    return "".join(f" [{t}]" for t in tags)
+
+
+def download_argv(spec: dict, cfg: dict, ffmpeg: bool, home: str | None = None) -> list:
     a = common_argv(cfg) + ["--newline", "--no-playlist", "--no-mtime", "--continue"]
     tmpl = cfg["template"]
     if spec.get("folder"):
         idx = spec.get("index")
         tmpl = safe_name(spec["folder"]) + "/" + (f"{int(idx):03d} - " if idx else "") + tmpl
-    sec = spec.get("section")
-    if sec and ffmpeg:
-        tag = f" [{clock_tag(sec['start'])}-{clock_tag(sec['end'])}]"
+    tag = name_tags(spec, ffmpeg)
+    if tag:
         i = tmpl.rfind(".%(ext)s")
         tmpl = tmpl[:i] + tag + tmpl[i:] if i >= 0 else tmpl + tag
-    a += ["-P", cfg["out_dir"], "-o", tmpl, "-N", str(cfg["frag_workers"])]
+    sec = spec.get("section")
+    a += ["-P", home or cfg["out_dir"], "-o", tmpl, "-N", str(cfg["frag_workers"])]
     if cfg.get("rate_limit"):
         a += ["-r", cfg["rate_limit"].replace(" ", "").upper()]
     q = str(spec.get("quality") or "best")
@@ -1078,7 +1170,8 @@ def list_files(limit=300) -> list:
         for p in root.rglob("*"):
             try:
                 if p.is_file() and p.suffix.lower() in VIDEO_EXT | AUDIO_EXT and not p.name.endswith(".part"):
-                    if len(p.relative_to(root).parts) > 3:
+                    rel = p.relative_to(root).parts
+                    if len(rel) > 3 or rel[0] == WORK_NAME:
                         continue
                     st = p.stat()
                     found.append({"path": str(p.relative_to(root)).replace("\\", "/"), "name": p.name,
@@ -1560,6 +1653,7 @@ def main():
 
     MANAGER = Manager()
     MANAGER.load()
+    tidy_work(CFG["out_dir"], set())
     try:
         SERVER = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     except OSError:

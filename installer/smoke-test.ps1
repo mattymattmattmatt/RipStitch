@@ -56,7 +56,7 @@ function Diagnose($url) {
   "  source clip: {0:N0} bytes" -f (Get-Item "$work\clip.mp4").Length
   Get-ChildItem "$env:USERPROFILE\Downloads\RipStitch" -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { "  {0,12:N0}  {1}" -f $_.Length, $_.Name }
   $f = Get-ChildItem "$env:USERPROFILE\Downloads\RipStitch" -Filter '*.mp4' -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($f) { '  first bytes: ' + ((Get-Content $f.FullName -AsByteStream -TotalCount 24 | ForEach-Object { $_.ToString('x2') }) -join ' ') }
+  if ($f) { '  first bytes: ' + ((Get-Content -LiteralPath $f.FullName -AsByteStream -TotalCount 24 | ForEach-Object { $_.ToString('x2') }) -join ' ') }
   try { (Invoke-WebRequest $url -Method Head).Headers.GetEnumerator() | ForEach-Object { "  header $($_.Key): $($_.Value)" } } catch { "  HEAD failed: $_" }
   Write-Host '--- yt-dlp -v on the same link'
   & (Join-Path $app 'python\python.exe') -m yt_dlp -v --no-colors --no-part -o "$work\diag.%(ext)s" $url 2>&1 | Select-Object -Last 25

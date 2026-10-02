@@ -87,7 +87,7 @@ jobs:
 
           Built from $env:GITHUB_SHA and tested on a clean Windows runner. SHA-256: ``$hash``
           "@
-          ./installer/publish.ps1 -Tag engine-latest -File dist\RipStitch-Setup.exe -Title 'RipStitch Engine for Windows (for the website)' -Notes $notes -Latest
+          ./installer/publish.ps1 -Tag engine-latest -Files dist\RipStitch-Setup.exe -Title 'RipStitch Engine for Windows (for the website)' -Notes $notes -Latest
 
   desktop:
     needs: bundle
@@ -131,4 +131,5 @@ jobs:
 
           Needs Windows 10 or 11 (64-bit) with the Microsoft Edge WebView2 Runtime, which Windows already includes. Engine $v, built from $env:GITHUB_SHA and tested on a clean Windows runner. SHA-256: ``$hash``
           "@
-          ./installer/publish.ps1 -Tag desktop-latest -File dist\RipStitch.exe -Title 'RipStitch Desktop for Windows (standalone app)' -Notes $notes
+          $shots = Get-ChildItem dist\desktop-smoke -Filter 'desktop-*.png' | ForEach-Object { $t = Join-Path dist ('screenshot-' + $_.Name.Substring(8)); Copy-Item $_.FullName $t; $t }
+          ./installer/publish.ps1 -Tag desktop-latest -Files (@('dist\RipStitch.exe') + $shots) -Title 'RipStitch Desktop for Windows (standalone app)' -Notes $notes

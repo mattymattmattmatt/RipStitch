@@ -3,7 +3,7 @@
 
 #define AppVersion GetEnv("RS_VERSION")
 #if AppVersion == ""
-  #define AppVersion "1.1.0"
+  #define AppVersion "1.2.0"
 #endif
 #define AppUrl "https://mattymattmattmatt.github.io/RipStitch/"
 #define Py "{app}\python\pythonw.exe"
