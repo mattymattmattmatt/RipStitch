@@ -4,7 +4,14 @@
 <h1 align="center">RipStitch</h1>
 <p align="center"><b>Rip</b> video from 1,800+ sites. <b>Stitch</b> clips into one cut.<br>
 Runs in your browser. Your files stay on your computer.</p>
-<p align="center"><a href="https://mattymattmattmatt.github.io/RipStitch/"><b>Open RipStitch →</b></a></p>
+<p align="center"><a href="https://mattymattmattmatt.github.io/RipStitch/"><b>Open RipStitch in your browser →</b></a></p>
+
+| Download | What it is |
+|---|---|
+| [**RipStitch.exe**](https://github.com/mattymattmattmatt/RipStitch/releases/download/desktop-latest/RipStitch.exe) (Windows, about 150 MB) | **The desktop app.** One file: double-click it and Rip and Stitch open in their own window. No browser, nothing to install. |
+| [**RipStitch-Setup.exe**](https://github.com/mattymattmattmatt/RipStitch/releases/download/engine-latest/RipStitch-Setup.exe) (Windows, about 95 MB) | The helper that lets the **website's** Rip tab download. Install once; it starts with Windows. |
+
+Neither is code-signed. If your browser says the file "isn't commonly downloaded", choose **Keep**. If Windows says *Windows protected your PC*, click **More info → Run anyway**.
 
 ![Rip: read a link, pick a quality, watch the queue](docs/img/screen-rip.jpg)
 ![Stitch: trim and join clips, then export](docs/img/screen-stitch.jpg)

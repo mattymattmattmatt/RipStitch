@@ -815,6 +815,8 @@ async function updateYtdlp(btn){
   finally{if(btn)btn.disabled=false}
 }
 $('#bRipSetup').onclick=openSettings;
+if(!DESKTOP&&/Windows/.test(navigator.userAgent))$('#bGetApp').hidden=false;
+$('#bGetApp').onclick=()=>toast('Downloading RipStitch.exe (about 150 MB)',{kind:'ok',sub:'If your browser says it “isn’t commonly downloaded”, choose Keep. If Windows says “Windows protected your PC”, click More info → Run anyway.',ms:12000});
 $('#engPill').onclick=()=>E.state==='online'?openSettings():(App.go('rip'),connect(true),setTimeout(()=>$('#rCard')?.scrollIntoView({behavior:'smooth',block:'start'}),60));
 
 /* ============================================================
