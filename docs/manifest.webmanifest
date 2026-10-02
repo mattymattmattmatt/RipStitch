@@ -1,0 +1,26 @@
+{
+  "name": "RipStitch",
+  "short_name": "RipStitch",
+  "description": "Rip videos from 1,800+ sites and stitch clips into one cut. Your files stay on your computer.",
+  "start_url": "./#rip",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0a0d12",
+  "theme_color": "#10141a",
+  "categories": ["utilities", "productivity", "photo"],
+  "icons": [
+    { "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "img/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "img/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "share_target": {
+    "action": "./",
+    "method": "GET",
+    "params": { "title": "title", "text": "text", "url": "url" }
+  },
+  "shortcuts": [
+    { "name": "Rip a link", "url": "./#rip", "icons": [{ "src": "img/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Stitch clips", "url": "./#stitch", "icons": [{ "src": "img/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

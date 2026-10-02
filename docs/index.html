@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RipStitch · rip videos, stitch them together</title>
+<meta name="description" content="Grab video and audio from 1,800+ sites, then trim and stitch clips into one cut. Runs in your browser. Your files stay on your computer.">
+<meta name="theme-color" content="#10141a">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="website">
+<meta property="og:title" content="RipStitch">
+<meta property="og:description" content="Rip videos from 1,800+ sites. Stitch clips into one cut. Your files stay on your computer.">
+<meta property="og:image" content="https://mattymattmattmatt.github.io/RipStitch/img/og.png">
+<meta property="og:url" content="https://mattymattmattmatt.github.io/RipStitch/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="img/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/rip.css">
+<link rel="stylesheet" href="css/stitch.css">
+</head>
+<body data-mod="rip">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-cut" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.6 7.6 20 18M8.6 16.4 20 6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M6.5 4.5h4v15h-4zM13.5 4.5h4v15h-4z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-start" viewBox="0 0 24 24"><path d="M5 5v14"/><path d="M20 6v12l-7-6zM13 6v12l-7-6z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-end" viewBox="0 0 24 24"><path d="M19 5v14"/><path d="M4 6v12l7-6zM11 6v12l7-6z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-stepb" viewBox="0 0 24 24"><path d="M17 6v12l-9-6z" fill="currentColor" stroke="none"/><path d="M7 6v12"/></symbol>
+  <symbol id="i-stepf" viewBox="0 0 24 24"><path d="M7 6v12l9-6z" fill="currentColor" stroke="none"/><path d="M17 6v12"/></symbol>
+  <symbol id="i-in" viewBox="0 0 24 24"><path d="M13 4H8v16h5"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M11 4h5v16h-5"/></symbol>
+  <symbol id="i-vol" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10"/></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></symbol>
+  <symbol id="i-sort" viewBox="0 0 24 24"><path d="M7 4v16M3.5 16.5 7 20l3.5-3.5M14 6h7M14 12h5M14 18h3"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+  <symbol id="i-open" viewBox="0 0 24 24"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5z"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></symbol>
+  <symbol id="i-keys" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M7.5 14h9"/></symbol>
+  <symbol id="i-zin" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2M8.5 11h5M11 8.5v5"/></symbol>
+  <symbol id="i-zout" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2M8.5 11h5"/></symbol>
+  <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+  <symbol id="i-tl" viewBox="0 0 24 24"><rect x="2.5" y="7" width="7" height="10" rx="1.5"/><rect x="11" y="7" width="10.5" height="10" rx="1.5"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M5 14v6h14v-6"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M12.5 15H17"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3.5 22 20H2z"/><path d="M12 10v4.5M12 17.2h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8h.01"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3A4 4 0 0 0 11 18.7l1-1"/></symbol>
+  <symbol id="i-paste" viewBox="0 0 24 24"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h6M9 18h3"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01" stroke-width="3"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+  <symbol id="i-log" viewBox="0 0 24 24"><path d="M5 5h14M5 10h14M5 15h9M5 20h6"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17.2h.01"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></symbol>
+  <symbol id="i-install" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 7v6M9 10l3 3 3-3"/></symbol>
+  <symbol id="i-cmd" viewBox="0 0 24 24"><path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M3 12h11M10 7l5 5-5 5"/><circle cx="18.5" cy="6.5" r="2"/><circle cx="18.5" cy="17.5" r="2"/><path d="M17 8l-1.5 3M17 16l-1.5-3"/></symbol>
+  <symbol id="i-scissor" viewBox="0 0 24 24"><path d="M4 7h4M4 17h4M10 4v16M14 4v16M16 7h4M16 17h4"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-4 1.3-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></symbol>
+</svg>
+
+<!-- ================================================================ TOP BAR -->
+<header class="top">
+  <a class="brand" href="#rip" id="brand" data-tip="About RipStitch"><img src="img/logo.svg" alt="" width="30" height="30"><span class="wm">Rip<span>Stitch</span></span></a>
+  <nav class="tabs" role="tablist" aria-label="Tools">
+    <button class="tab" role="tab" data-go="rip" id="tabRip" aria-selected="true" aria-controls="view-rip" data-tip="Grab video from a link" data-key="Alt+1"><svg class="ic"><use href="#i-dl"/></svg><span class="tl">Rip</span><span class="cnt" id="ripCnt" hidden></span></button>
+    <button class="tab" role="tab" data-go="stitch" id="tabStitch" aria-selected="false" aria-controls="view-stitch" data-tip="Trim and join clips" data-key="Alt+2"><svg class="ic"><use href="#i-cut"/></svg><span class="tl">Stitch</span><span class="cnt" id="stitchCnt" hidden></span></button>
+  </nav>
+  <div class="vsep hide-sm"></div>
+
+  <!-- Rip toolbar -->
+  <div class="tb" data-for="rip" id="tbRip">
+    <button class="eng" id="engPill" data-tip="Engine status · click for setup"><span class="dot" id="engDot"></span><span id="engTxt">Engine</span></button>
+    <span class="tchip hide-md" id="tcFF" hidden></span>
+    <span class="tchip hide-md" id="tcFree" hidden></span>
+    <div class="grow"></div>
+    <button class="btn flat sm hide-sm" id="bRipSetup" data-tip="Download settings &amp; engine"><svg class="ic"><use href="#i-sliders"/></svg><span class="hide-md">Setup</span></button>
+  </div>
+
+  <!-- Stitch toolbar -->
+  <div class="tb" data-for="stitch" id="tbStitch" hidden>
+    <div class="menu-wrap lockable">
+      <button class="btn hv" id="bAdd" data-tip="Add video clips" data-key="A"><svg class="ic"><use href="#i-plus"/></svg><span class="hide-sm">Add clips</span><svg class="ic chev" id="bAddMore"><use href="#i-chev"/></svg></button>
+      <div class="menu" id="mAdd" hidden>
+        <button data-add="files"><svg class="ic"><use href="#i-film"/></svg>From this computer… <small>A</small></button>
+        <button data-add="rip"><svg class="ic"><use href="#i-dl"/></svg>From your Rip downloads…</button>
+        <hr><button data-add="project"><svg class="ic"><use href="#i-open"/></svg>Open a project… <small>Ctrl+O</small></button>
+      </div>
+    </div>
+    <div class="menu-wrap lockable hide-sm">
+      <button class="btn" id="bSort" data-tip="Sort the timeline"><svg class="ic"><use href="#i-sort"/></svg><span class="hide-md">Sort</span><svg class="ic chev"><use href="#i-chev"/></svg></button>
+      <div class="menu" id="mSort" hidden>
+        <button data-sort="name">Name <small>A → Z, natural</small></button>
+        <button data-sort="nameDesc">Name <small>Z → A</small></button>
+        <hr>
+        <button data-sort="date">Date modified <small>oldest first</small></button>
+        <button data-sort="dateDesc">Date modified <small>newest first</small></button>
+        <hr>
+        <button data-sort="len">Length <small>shortest first</small></button>
+        <button data-sort="rev">Reverse current order</button>
+      </div>
+    </div>
+    <div class="vsep hide-sm"></div>
+    <button class="btn flat io lockable" id="bUndo" data-tip="Undo" data-key="Ctrl+Z"><svg class="ic"><use href="#i-undo"/></svg></button>
+    <button class="btn flat io lockable" id="bRedo" data-tip="Redo" data-key="Ctrl+Shift+Z"><svg class="ic"><use href="#i-redo"/></svg></button>
+    <div class="tally">
+      <div><span>Clips</span><b id="tyClips">0</b></div>
+      <div><span>Runtime</span><b id="tyDur">0:00.0</b></div>
+      <div><span>Output</span><b id="tyOut">—</b></div>
+    </div>
+    <div class="grow"></div>
+    <div class="vsep hide-sm"></div>
+    <button class="btn flat io lockable hide-sm" id="bOpen" data-tip="Open project" data-key="Ctrl+O"><svg class="ic"><use href="#i-open"/></svg></button>
+    <button class="btn flat io lockable hide-sm" id="bSave" data-tip="Save project (order, trims, settings)" data-key="Ctrl+S"><svg class="ic"><use href="#i-save"/></svg></button>
+    <button class="btn flat io danger lockable hide-sm" id="bClear" data-tip="Clear timeline (undoable)"><svg class="ic"><use href="#i-trash"/></svg></button>
+  </div>
+
+  <div class="vsep hide-sm"></div>
+  <button class="btn flat cmdk" id="bCmd" data-tip="Search every command"><svg class="ic"><use href="#i-search"/></svg><span>Commands</span><kbd>Ctrl K</kbd></button>
+  <button class="btn flat io" id="bKeys" data-tip="Keyboard shortcuts" data-key="?"><svg class="ic"><use href="#i-keys"/></svg></button>
+</header>
+
+<main class="views">
+<!-- ================================================================ RIP -->
+<section class="view" id="view-rip" role="tabpanel" aria-labelledby="tabRip">
+  <div class="rp-main" id="rMain">
+    <div class="rp-inner">
+      <div class="rp-hero" id="rHero">
+        <img class="art" src="img/strip.svg" alt="" width="680" height="178">
+        <h1>Rip it from the web. <span>Stitch it into one.</span></h1>
+        <p>Paste a link from YouTube, Vimeo, X, TikTok, Twitch, Reddit, SoundCloud or any of 1,800+ sites. Pick a quality, and it lands in your Downloads folder, ready to cut in Stitch.</p>
+      </div>
+
+      <form class="rp-bar" id="rForm" autocomplete="off">
+        <svg class="ic"><use href="#i-link"/></svg>
+        <input id="rUrl" type="text" inputmode="url" spellcheck="false" placeholder="Paste a video or playlist link…" aria-label="Video or playlist link">
+        <button type="button" class="btn flat io" id="rPaste" data-tip="Paste from clipboard" hidden><svg class="ic"><use href="#i-paste"/></svg></button>
+        <button type="submit" class="btn rip lg" id="rRead"><svg class="ic" id="rReadIc"><use href="#i-bolt"/></svg><i class="spin"></i><span>Read link</span></button>
+      </form>
+      <div class="rp-opts">
+        <label class="swrow inline" data-tip="List every video in a playlist or channel instead of just one"><input type="checkbox" class="sw" id="rPl"><span>Whole playlist</span></label>
+        <label class="swrow inline" data-tip="Finished downloads drop straight onto the Stitch timeline"><input type="checkbox" class="sw" id="rAuto"><span>Send to Stitch when done</span></label>
+        <span class="hint">Reads the page and lists every stream. Nothing downloads until you pick.</span>
+      </div>
+      <div class="rp-suggest" id="rSuggest" hidden></div>
+      <div class="rp-reading" id="rReading" hidden><div class="bar"><div class="fill indet"></div></div><span id="rReadingTxt">Reading…</span><button class="btn sm flat" id="rReadCancel">Cancel</button></div>
+      <div class="callout bad rp-fault" id="rFault" hidden></div>
+      <div class="rp-recent" id="rRecent" hidden></div>
+
+      <div id="rEngine"></div>
+      <div id="rSpec" hidden></div>
+    </div>
+  </div>
+
+  <aside class="rp-side" aria-label="Downloads">
+    <div class="rp-side-h">
+      <h2>Downloads</h2><span class="rp-count" id="rCount"></span>
+      <div class="r">
+        <button class="btn flat sm io" id="rBell" data-tip="Notify me when downloads finish"><svg class="ic"><use href="#i-bell"/></svg></button>
+        <button class="btn flat sm" id="rClear" hidden data-tip="Remove finished and failed items">Clear</button>
+      </div>
+    </div>
+    <div class="rp-jobs" id="rJobs"></div>
+    <div class="rp-side-f">
+      <button class="rp-folder" id="rFolder" data-tip="Open the download folder"><svg class="ic"><use href="#i-open"/></svg><span id="rFolderTxt">Downloads/RipStitch</span></button>
+      <button class="btn hv" id="rToStitch" disabled hidden><svg class="ic"><use href="#i-cut"/></svg><span id="rToStitchTxt">Send finished to Stitch</span></button>
+    </div>
+  </aside>
+</section>
+
+<!-- ================================================================ STITCH -->
+<section class="view" id="view-stitch" role="tabpanel" aria-labelledby="tabStitch" hidden>
+  <div class="work">
+    <section class="viewer">
+      <div class="stage" id="stage">
+        <div class="frame" id="frame" hidden>
+          <video id="d0" preload="auto" playsinline></video>
+          <video id="d1" preload="auto" playsinline></video>
+          <canvas id="xcv"></canvas>
+          <div class="fmsg" id="fmsg" hidden></div>
+          <div class="fbadge" id="fbadge"></div>
+        </div>
+        <div class="empty" id="empty">
+          <img class="art" src="img/strip.svg" alt="" width="680" height="178">
+          <h2>Drop video clips to start a cut</h2>
+          <p>MP4 · MOV · WebM · MKV. Everything is read right here in your browser.</p>
+          <div class="row">
+            <button class="btn hv" id="bAdd2"><svg class="ic"><use href="#i-plus"/></svg>Add clips</button>
+            <button class="btn" id="bImp2"><svg class="ic"><use href="#i-dl"/></svg>From Rip downloads</button>
+            <button class="btn" id="bOpen2"><svg class="ic"><use href="#i-open"/></svg>Open project</button>
+          </div>
+          <div class="restore" id="restore" hidden></div>
+          <div class="hints"><span><kbd>Space</kbd> play</span><span><kbd>I</kbd> <kbd>O</kbd> mark in / out</span><span><kbd>S</kbd> preview whole cut</span><span><kbd>?</kbd> all shortcuts</span></div>
+        </div>
+      </div>
+      <div class="scrub lockable" id="scrub">
+        <div class="sb-rail"><div class="sb-play" id="sbPlay"></div><div class="sb-range" id="sbRange"></div><div id="sbCuts"></div></div>
+        <div class="sb-h in" id="sbIn" data-tip="Drag to set in point"></div>
+        <div class="sb-h out" id="sbOut" data-tip="Drag to set out point"></div>
+        <div class="sb-head" id="sbHead"></div>
+      </div>
+      <div class="transport lockable">
+        <div class="seg" id="vMode">
+          <button data-m="clip" data-tip="Clip viewer: trim the selected clip" data-key="C">Clip</button>
+          <button data-m="seq" data-tip="Sequence viewer: play the whole cut" data-key="S">Sequence</button>
+        </div>
+        <div class="tp-btns">
+          <button class="btn flat io hide-sm" id="tStart" data-tip="Go to start" data-key="Home"><svg class="ic"><use href="#i-start"/></svg></button>
+          <button class="btn flat io" id="tBack" data-tip="Back one frame (Shift: 1 s)" data-key="←"><svg class="ic"><use href="#i-stepb"/></svg></button>
+          <button class="btn play" id="tPlay" data-tip="Play / pause" data-key="Space"><svg class="ic"><use href="#i-play"/></svg></button>
+          <button class="btn flat io" id="tFwd" data-tip="Forward one frame (Shift: 1 s)" data-key="→"><svg class="ic"><use href="#i-stepf"/></svg></button>
+          <button class="btn flat io hide-sm" id="tEnd" data-tip="Go to end" data-key="End"><svg class="ic"><use href="#i-end"/></svg></button>
+        </div>
+        <div class="tc"><b id="tcNow">0:00.00</b><span id="tcDur">/ 0:00.00</span></div>
+        <div class="grow"></div>
+        <div class="tp-info" id="tpInfo"></div>
+        <button class="btn sm" id="tIn" data-tip="Mark in at playhead" data-key="I"><svg class="ic"><use href="#i-in"/></svg>In</button>
+        <button class="btn sm" id="tOut" data-tip="Mark out at playhead" data-key="O">Out<svg class="ic"><use href="#i-out"/></svg></button>
+        <button class="btn flat io" id="tVol" data-tip="Preview sound on / off" data-key="Shift+M"><svg class="ic"><use href="#i-vol"/></svg></button>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="sscroll">
+        <section class="sec lockable" id="insp"></section>
+        <section class="sec lockable" id="outSec">
+          <div class="sec-h"><h2>Output</h2><div class="r"><span class="mono" id="outSum" style="font-size:11px;color:var(--faint)"></span></div></div>
+          <div class="g2">
+            <div class="fld"><label for="oRes">Size</label>
+              <select class="inp" id="oRes">
+                <option value="auto">Match first clip</option>
+                <option value="3840x2160">3840 × 2160 · 4K</option>
+                <option value="2560x1440">2560 × 1440</option>
+                <option value="1920x1080">1920 × 1080 · HD</option>
+                <option value="1280x720">1280 × 720</option>
+                <option value="1080x1920">1080 × 1920 · vertical</option>
+                <option value="1080x1350">1080 × 1350 · 4:5</option>
+                <option value="1080x1080">1080 × 1080 · square</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </div>
+            <div class="fld"><label for="oFps">Frame rate</label>
+              <select class="inp" id="oFps">
+                <option value="auto">Match first clip</option>
+                <option>60</option><option>59.94</option><option>50</option><option>30</option><option>29.97</option><option>25</option><option>24</option><option>23.976</option>
+              </select>
+            </div>
+          </div>
+          <div class="g2" id="customRes" hidden style="margin-top:10px">
+            <div class="fld"><label for="oW">Width</label><input class="inp" type="number" id="oW" value="1920" min="16" max="7680" step="2"></div>
+            <div class="fld"><label for="oH">Height</label><input class="inp" type="number" id="oH" value="1080" min="16" max="7680" step="2"></div>
+          </div>
+          <div class="g2" style="margin-top:10px">
+            <div class="fld"><label for="oFit">Fit</label>
+              <select class="inp" id="oFit"><option value="contain">Letterbox</option><option value="cover">Crop to fill</option><option value="fill">Stretch</option></select>
+            </div>
+            <div class="fld"><label for="oName">File name</label><input class="inp" id="oName" value="stitched" spellcheck="false"></div>
+          </div>
+          <label class="swrow" style="margin-top:10px"><span>Include audio</span><input type="checkbox" class="sw" id="oAudio" checked></label>
+          <div class="sub">Browser export</div>
+          <div class="g2">
+            <div class="fld"><label for="oFmt">Format</label><select class="inp" id="oFmt"></select></div>
+            <div class="fld"><label for="oRate">Bitrate</label>
+              <select class="inp" id="oRate"><option value="auto">Auto</option><option value="40">40 Mbps</option><option value="24">24 Mbps</option><option value="16">16 Mbps</option><option value="10">10 Mbps</option><option value="6">6 Mbps</option><option value="3">3 Mbps</option></select>
+            </div>
+          </div>
+          <label class="swrow" style="margin-top:8px"><span>Hear audio while exporting</span><input type="checkbox" class="sw" id="oMon"></label>
+          <p class="note" style="margin-top:6px">Browser export keeps every source frame at its native timing. The frame-rate setting applies to the FFmpeg re-encode.</p>
+        </section>
+      </div>
+      <div class="foot">
+        <div id="actions" class="xprog">
+          <div class="est" id="est"><span>Browser export · real-time</span><b id="estTxt">—</b></div>
+          <button class="btn hv" id="bExport"><svg class="ic"><use href="#i-export"/></svg>Export video</button>
+          <button class="btn weld" id="bFF"><svg class="ic"><use href="#i-term"/></svg>FFmpeg script: fast &amp; lossless</button>
+        </div>
+        <div id="xprog" class="xprog" hidden>
+          <div class="xrow"><span id="xL">Preparing…</span><b id="xPct">0%</b></div>
+          <div class="pbar"><i id="xBar"></i></div>
+          <div class="xrow"><span id="xT">0:00 / 0:00</span><span id="xEta"></span></div>
+          <button class="btn danger" id="bCancel"><svg class="ic"><use href="#i-x"/></svg>Cancel export</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="split lockable" id="split" title="Drag to resize"></div>
+
+  <section class="dock">
+    <div class="dockbar">
+      <div class="seg lockable" id="vView">
+        <button data-v="timeline" data-tip="Timeline: clip widths to scale" data-key="G"><svg class="ic"><use href="#i-tl"/></svg><span class="hide-sm">Timeline</span></button>
+        <button data-v="grid" data-tip="Grid: reorder lots of clips fast" data-key="G"><svg class="ic"><use href="#i-grid"/></svg><span class="hide-sm">Grid</span></button>
+      </div>
+      <div class="vsep"></div>
+      <button class="btn flat io" id="zOut" data-tip="Zoom out" data-key="−"><svg class="ic"><use href="#i-zout"/></svg></button>
+      <span class="zread" id="zRead">FIT</span>
+      <button class="btn flat io" id="zIn" data-tip="Zoom in" data-key="+"><svg class="ic"><use href="#i-zin"/></svg></button>
+      <button class="btn flat io" id="zFit" data-tip="Fit whole cut" data-key="0"><svg class="ic"><use href="#i-fit"/></svg></button>
+      <div class="grow"></div>
+      <span class="dock-hint" id="dockHint">Drag clips to reorder · drag clip edges to trim · click the ruler to scrub · Ctrl+wheel to zoom</span>
+    </div>
+    <div class="tl">
+      <canvas id="ruler"></canvas>
+      <div class="tls" id="tls">
+        <div class="tlc" id="tlc">
+          <div class="track" id="track"></div>
+          <div class="ph" id="ph" hidden></div>
+          <div class="ins" id="ins" hidden></div>
+        </div>
+      </div>
+      <div class="tl-empty" id="tlEmpty" style="top:34px">Clips land here in name order. Drag to reorder, drag the edges to trim.</div>
+    </div>
+  </section>
+</section>
+</main>
+
+<!-- ================================================================ DIALOGS -->
+<dialog id="dlgFF">
+  <div class="dh">
+    <div><h3>FFmpeg script</h3><p>Runs on your machine. Much faster than real-time, and lossless when the clips match.</p></div>
+    <button class="btn flat io" data-close data-tip="Close" data-key="Esc"><svg class="ic"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="db">
+    <div class="ff">
+      <div class="stack">
+        <div class="fld"><label>Method</label><div class="seg" id="ffMode"><button data-v="copy">Lossless copy</button><button data-v="encode">Re-encode</button></div></div>
+        <div class="fld" data-enc><label for="ffEnc">Encoder</label>
+          <select class="inp" id="ffEnc">
+            <option value="x264">H.264 · libx264 (CPU)</option>
+            <option value="x265">HEVC · libx265 (CPU)</option>
+            <option value="nv264">H.264 · NVENC (NVIDIA)</option>
+            <option value="nv265">HEVC · NVENC (NVIDIA)</option>
+          </select>
+        </div>
+        <div class="fld" data-enc><label>Quality</label><div class="seg" id="ffQ"><button data-v="high">High</button><button data-v="bal">Balanced</button><button data-v="small">Small</button></div></div>
+        <div class="fld" data-enc><label>Output (from the Output panel)</label><div class="ff-out" id="ffOut"></div></div>
+        <div class="fld"><label>Shell</label><div class="seg" id="ffShell"><button data-v="ps">PowerShell</button><button data-v="sh">Bash</button></div></div>
+        <div class="fld"><label>Lossless check</label><div class="checks" id="ffCheck"></div></div>
+      </div>
+      <div>
+        <textarea id="ffText" readonly spellcheck="false"></textarea>
+        <p class="howto" id="ffHow"></p>
+      </div>
+    </div>
+  </div>
+  <div class="df">
+    <span class="note" id="ffNote"></span>
+    <div class="grow"></div>
+    <button class="btn" id="ffCopy"><svg class="ic"><use href="#i-copy"/></svg>Copy</button>
+    <button class="btn weld" id="ffDl"><svg class="ic"><use href="#i-dl"/></svg>Download script</button>
+  </div>
+</dialog>
+
+<dialog id="dlgKeys" class="mid">
+  <div class="dh"><div><h3>Keyboard shortcuts</h3><p>Shortcuts work whenever you're not typing in a field.</p></div><button class="btn flat io" data-close><svg class="ic"><use href="#i-x"/></svg></button></div>
+  <div class="db" tabindex="-1" style="outline:none"><div class="keys" id="keysList"></div></div>
+  <div class="df"><span class="note">Press <kbd>Ctrl</kbd> <kbd>K</kbd> to search every command.</span><span class="sig">RIPSTITCH · MATTY P FROM I.T.</span></div>
+</dialog>
+
+<dialog id="dlgCmd" aria-label="Command palette">
+  <div class="cmd-in"><svg class="ic"><use href="#i-search"/></svg><input id="cmdQ" placeholder="Type a command, or paste a link to rip…" spellcheck="false" autocomplete="off"><kbd>Esc</kbd></div>
+  <div class="cmd-list" id="cmdList" role="listbox"></div>
+  <div class="cmd-foot"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>Enter</kbd> run</span><span><kbd>Esc</kbd> close</span></div>
+</dialog>
+
+<dialog id="dlgSet" class="mid">
+  <div class="dh"><div><h3>Rip setup</h3><p>Saved in the engine on this computer, so they apply to every download.</p></div><button class="btn flat io" data-close><svg class="ic"><use href="#i-x"/></svg></button></div>
+  <div class="db" id="setBody"></div>
+  <div class="df">
+    <span class="note" id="setMsg"></span>
+    <div class="grow"></div>
+    <button class="btn" data-close>Cancel</button>
+    <button class="btn rip" id="setSave"><svg class="ic"><use href="#i-check"/></svg>Save setup</button>
+  </div>
+</dialog>
+
+<dialog id="dlgImp" class="mid">
+  <div class="dh"><div><h3>Add from Rip downloads</h3><p id="impSub">Files in your download folder, newest first.</p></div><button class="btn flat io" data-close><svg class="ic"><use href="#i-x"/></svg></button></div>
+  <div class="db"><div class="rp-pltools"><input class="inp" id="impQ" placeholder="Filter by name…" spellcheck="false"><button class="btn sm" id="impAll">Select all</button><button class="btn sm" id="impNone">None</button><span class="cnt" id="impCnt"></span></div><div class="imp-list" id="impList"></div></div>
+  <div class="df"><span class="note" id="impNote">Files load straight from the engine on your computer.</span><div class="grow"></div><button class="btn" data-close>Cancel</button><button class="btn hv" id="impGo" disabled><svg class="ic"><use href="#i-cut"/></svg>Add to Stitch</button></div>
+</dialog>
+
+<dialog id="dlgAbout" class="narrow">
+  <div class="db">
+    <div class="about">
+      <img class="mark" src="img/logo.svg" alt="">
+      <h2>Rip<span style="background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent">Stitch</span></h2>
+      <p><b style="color:var(--rip)">Rip</b> reads a link and grabs the video or audio you pick, using yt-dlp through a small engine on your own computer. <b style="color:var(--hv)">Stitch</b> trims and joins clips into one cut, right here in the browser, and exports a video or a lossless FFmpeg script.</p>
+      <div class="pills"><span class="chip">No uploads</span><span class="chip">No accounts</span><span class="chip">Works offline</span><span class="chip">Open source</span></div>
+      <div class="bmk"><a class="btn rip" id="bBmk" href="#" draggable="true"><svg class="ic"><use href="#i-bolt"/></svg>Rip with RipStitch</a><span class="note">Drag this button to your bookmarks bar. Click it on any video page and it opens here, already reading the link.</span></div>
+      <p style="font-size:12px">Only download what you have the right to. Respect creators and each site's terms.</p>
+      <p class="mono" style="font-size:10.5px;letter-spacing:.14em;color:var(--faint)">MATTY P FROM I.T.</p>
+    </div>
+  </div>
+  <div class="df"><a class="btn flat" href="https://github.com/mattymattmattmatt/RipStitch" target="_blank" rel="noopener"><svg class="ic"><use href="#i-github"/></svg>Source</a><button class="btn flat" id="bInstall" hidden><svg class="ic"><use href="#i-install"/></svg>Install as an app</button><div class="grow"></div><button class="btn" data-close>Close</button></div>
+</dialog>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="tip" id="tip" hidden></div>
+<div class="dtip" id="dtip" hidden></div>
+<input type="file" id="fileIn" accept="video/*,.mkv,.mov,.m4v,.webm,.avi,.mts,.m2ts" multiple hidden>
+<input type="file" id="projIn" accept=".json,.stitch,.splice,application/json" hidden>
+
+<script src="js/core.js"></script>
+<script src="js/stitch.js"></script>
+<script src="js/rip.js"></script>
+<script src="js/boot.js"></script>
+</body>
+</html>
