@@ -93,7 +93,9 @@ class SmokeTest(private val act: MainActivity, private val cfg: File) {
     private fun run() {
         try {
             val url = JSONObject(cfg.readText()).getString("url")
-            check(waitFor("window.Rip&&Rip.engine.state==='online'", 120_000)) { "the page never connected to the engine" }
+            check(waitFor("typeof Rip!=='undefined'&&Rip.engine.state==='online'", 120_000)) {
+                "the page never connected to the engine (state " + js("typeof Rip!=='undefined'?Rip.engine.state:'no Rip'") + ")"
+            }
             val h = JSONObject(js("JSON.stringify(Rip.engine.health)"))
             log("health: engine ${h.optString("version")} · yt-dlp ${h.optString("ytdlp")} (${h.optString("runtime")}) · ffmpeg ${h.optBoolean("ffmpeg")} ${h.optString("ffmpeg_version")} · js ${h.optString("js_runtime")} · ${h.optString("install")}/${h.optString("platform")} · ${h.optString("out_dir")}")
             check(h.optString("install") == "android") { "install kind is ${h.optString("install")}" }
