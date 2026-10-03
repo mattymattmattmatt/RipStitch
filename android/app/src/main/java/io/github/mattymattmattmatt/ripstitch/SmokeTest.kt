@@ -130,7 +130,7 @@ class SmokeTest(private val act: MainActivity, private val cfg: File) {
             phase("stitch")
 
             val stitchDir = File(Engine.downloadsDir(), "Stitch")
-            val before = stitchDir.list()?.toSet() ?: emptySet()
+            val existing = stitchDir.list()?.toSet() ?: emptySet()
             js("""(()=>{const s=document.getElementById('oFmt');const o=[...s.options].find(o=>o.value.startsWith('video/webm'))||s.options[0];
                  if(o){s.value=o.value;s.dispatchEvent(new Event('change',{bubbles:true}))}
                  const a=document.getElementById('oAudio');if(a.checked)a.click();
@@ -139,7 +139,7 @@ class SmokeTest(private val act: MainActivity, private val cfg: File) {
             val until = System.currentTimeMillis() + 150_000
             while (exported == null && System.currentTimeMillis() < until) {
                 Thread.sleep(1000)
-                exported = stitchDir.listFiles()?.firstOrNull { it.name !in before && !it.name.endsWith(".part") && it.name.startsWith("smoke-export") }
+                exported = stitchDir.listFiles()?.firstOrNull { it.name !in existing && !it.name.endsWith(".part") && it.name.startsWith("smoke-export") }
             }
             check(exported != null && exported.length() > 0) { "the Stitch export never arrived: " + js("[...document.querySelectorAll('.toast')].map(t=>t.textContent).join(' | ')") }
             log("export: ${exported.name} ${exported.length()} bytes")
