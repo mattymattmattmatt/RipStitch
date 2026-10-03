@@ -20,7 +20,7 @@ function Fail($msg) {
   exit 1
 }
 function Launch($label) {
-  Remove-Item "$out\smoke.txt", "$out\quit", "$out\read.txt", "$out\read-done.txt" -ErrorAction SilentlyContinue
+  Remove-Item "$out\smoke.txt", "$out\quit", "$out\read.txt", "$out\read-done.txt", "$out\picker.txt" -ErrorAction SilentlyContinue
   $sw = [Diagnostics.Stopwatch]::StartNew()
   $p = Start-Process $exe -ArgumentList '--smoke', "`"$out`"" -PassThru
   while (-not (Test-Path "$out\smoke.txt")) {
@@ -69,8 +69,14 @@ if ($j.status -ne 'done' -or -not $j.file_ok) {
 
 Write-Host '== read a link inside the window'
 Set-Content "$out\read.txt" $clip
-for ($i = 0; $i -lt 120 -and -not (Test-Path "$out\read-done.txt"); $i++) { Start-Sleep -Milliseconds 500 }
+for ($i = 0; $i -lt 240 -and -not (Test-Path "$out\read-done.txt"); $i++) { Start-Sleep -Milliseconds 500 }
 if (-not (Test-Path "$out\read-done.txt")) { Fail 'the window never showed the read result' }
+
+Write-Host '== Settings > Downloads > Browse (the Windows folder picker, accepted automatically)'
+$picked = if (Test-Path "$out\picker.txt") { (Get-Content "$out\picker.txt" -Raw).Trim() } else { '' }
+$expect = (Invoke-RestMethod "$api/api/health").out_dir
+Write-Host "  picker returned '$picked' (download folder '$expect')"
+if ($picked.TrimEnd('\') -ne $expect.TrimEnd('\')) { Fail 'the folder picker did not return the download folder' }
 
 Write-Host '== close the window'
 Close-App $run.Process

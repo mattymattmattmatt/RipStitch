@@ -1,6 +1,6 @@
 /* RipStitch service worker: network-first for the app shell so updates land
    immediately, with a cached copy for offline use. Never touches the engine. */
-const CACHE='ripstitch-v2';
+const CACHE='ripstitch-v3';
 const SHELL=['./','index.html','css/app.css','css/rip.css','css/stitch.css','js/core.js','js/stitch.js','js/rip.js','js/boot.js',
   'img/logo.svg','img/favicon.svg','img/strip.svg','img/icon-192.png','manifest.webmanifest'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});

@@ -21,7 +21,7 @@ RipStitch is two tools in one site:
 | | |
 |---|---|
 | **Rip** (was HAUL) | Paste a link from YouTube, Vimeo, X, TikTok, Twitch, Reddit, SoundCloud and 1,800+ other sites. RipStitch lists every stream on offer, with size estimates, so you can grab the best quality, a specific resolution, audio only, or just a section of the video. Downloads run in a queue on your own computer. |
-| **Stitch** (was SPLICE) | Drop in video clips, reorder them, trim them frame by frame, and preview the whole cut with gapless playback. Export a video right in the browser, or generate an FFmpeg script that stitches losslessly in seconds. |
+| **Stitch** (was SPLICE) | Drop in video clips, reorder them, trim them frame by frame, split them anywhere, add fades and set each clip's volume, then preview the whole cut with gapless playback. Export a video right in the browser, or generate an FFmpeg script that stitches losslessly in seconds. |
 
 The tools talk to each other: a finished download is one click (or zero, with **Send to Stitch when done**) from the Stitch timeline.
 
@@ -69,6 +69,10 @@ If you fork it or host it somewhere else, start the engine with `--allow-origin 
 - **Bookmarklet and share sheet.** Drag the **Rip with RipStitch** button from the About box to your bookmarks bar. On Android, install the app and share links straight to it.
 - **Installable and offline.** Install it as an app. Stitch keeps working with no connection.
 - **Background-friendly.** Progress shows in the tab title, with optional desktop notifications when downloads finish.
+- **Cut anywhere.** Press <kbd>B</kbd> to split the clip under the playhead, or pick up the **Blade** (<kbd>Shift</kbd>+<kbd>B</kbd>) and click any point on a clip; the viewer shows the exact frame before you cut. Right-click a clip for everything else.
+- **Fades and volume.** Fade any clip in from or out to black (picture and sound together) and set its volume from 0 to 200%. They're applied in the browser export and the FFmpeg re-encode.
+- **Save a frame.** Press <kbd>P</kbd> to save the frame in the viewer as a full-size PNG or JPEG.
+- **Settings in one place.** The gear in the top bar (<kbd>Ctrl</kbd>+<kbd>,</kbd>) holds the download folder (with a **Browse…** button that opens your computer's own folder picker), download options, editor preferences and the engine's status.
 - **Stitch keeps your work.** Autosaved sessions, undo/redo, project files, and a lossless check that tells you whether stream copy will work.
 
 Press <kbd>?</kbd> in the app for every keyboard shortcut.

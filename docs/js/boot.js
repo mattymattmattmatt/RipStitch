@@ -8,7 +8,8 @@
   const qs=new URLSearchParams(location.search);
   const shared=findUrl(qs.get('url'))||findUrl(qs.get('text'))||findUrl(qs.get('title'));
   const h=location.hash.slice(1);
-  const start=shared?'rip':App.mods[h]?h:LS.get('mod','rip');
+  const pref=LS.get('start','last');
+  const start=shared?'rip':App.mods[h]?h:App.mods[pref]?pref:LS.get('mod','rip');
   if(qs.toString())history.replaceState(null,'',location.pathname+'#'+start);
   App.go(start,{force:true});
   Rip.init();

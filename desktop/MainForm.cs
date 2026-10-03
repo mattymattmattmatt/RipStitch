@@ -2,8 +2,10 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
@@ -70,6 +72,7 @@ namespace RipStitch
                     e.Cancel = true; OpenOutside(e.Uri);
                 };
                 cw.PermissionRequested += (s, e) => { if (IsOurs(e.Uri)) e.State = CoreWebView2PermissionState.Allow; };
+                cw.WebMessageReceived += OnWebMessage;
 
                 cw.NavigateToString(Splash("Starting RipStitch…", null));
                 var ok = await Task.Run(() => { Program.StartEngine(); return Program.WaitForEngine(60000); });
@@ -88,6 +91,30 @@ namespace RipStitch
                 Program.Log("init failed: " + ex);
                 if (Program.SmokeDir != null) { File.WriteAllText(Path.Combine(Program.SmokeDir, "smoke.txt"), "init-failed: " + ex.Message); ExitCode = 4; confirmedClose = true; Close(); return; }
                 MessageBox.Show(this, "RipStitch couldn't open its window:\n\n" + ex.Message, "RipStitch", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // ------------------------------------------------------------------ requests from the page
+        static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
+
+        /// <summary>The page asks the window for things a web page can't do, e.g. {cmd:"pickFolder", id, start, title}.</summary>
+        void OnWebMessage(object sender, CoreWebView2WebMessageReceivedEventArgs e)
+        {
+            if (!IsOurs(e.Source)) return;
+            Dictionary<string, object> msg;
+            try { msg = Json.Deserialize<Dictionary<string, object>>(e.WebMessageAsJson); } catch { return; }
+            string Str(string k) => msg != null && msg.TryGetValue(k, out var v) && v != null ? v.ToString() : "";
+            var id = Str("id");
+            if (Str("cmd") == "pickFolder")
+            {
+                // Show the dialog after this event returns, so WebView2 isn't held inside its own callback.
+                BeginInvoke(new Action(() =>
+                {
+                    var reply = new Dictionary<string, object> { ["id"] = id };
+                    try { reply["path"] = FolderPicker.Pick(Handle, Str("start"), Str("title"), Program.SmokeDir != null ? 1500 : 0); }
+                    catch (Exception ex) { Program.Log("folder picker: " + ex); reply["error"] = ex.Message; }
+                    web.CoreWebView2?.PostWebMessageAsJson(Json.Serialize(reply));
+                }));
             }
         }
 
@@ -201,6 +228,18 @@ namespace RipStitch
                     for (int i = 0; i < 60 && await Js("!!document.querySelector('#rPicks')") != "true"; i++) await Task.Delay(500);
                     await Task.Delay(800);
                     await Capture("desktop-read.png");
+                    await Js("Settings.open('downloads')"); await Task.Delay(700);
+                    await Js("document.querySelector('[data-sa=browse]').click()");
+                    string picked = "";
+                    for (int i = 0; i < 40 && picked == ""; i++) { await Task.Delay(500); picked = await Js("(document.getElementById('sOut')||{dataset:{}}).dataset.picked||''"); }
+                    File.WriteAllText(Path.Combine(dir, "picker.txt"), picked);
+                    await Task.Delay(400);
+                    await Capture("desktop-settings.png");
+                    await Js("document.getElementById('dlgSet').close()");
+                    await Js("App.go('stitch')"); await Task.Delay(300);
+                    await Js("Settings.open('stitch')"); await Task.Delay(500);
+                    await Capture("desktop-settings-stitch.png");
+                    await Js("document.getElementById('dlgSet').close();App.go('rip')");
                     File.WriteAllText(Path.Combine(dir, "read-done.txt"), "ok");
                 }
                 await Task.Delay(400);

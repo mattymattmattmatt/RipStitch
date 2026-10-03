@@ -6,7 +6,7 @@
 const Rip=(()=>{
 const DEFAULT_BASE='http://127.0.0.1:8731';
 const HOSTED_ENGINE='https://mattymattmattmatt.github.io/RipStitch/engine/ripstitch_engine.py';
-const ENGINE_LATEST='1.2.0';   // keep in step with VERSION in docs/engine/ripstitch_engine.py
+const ENGINE_LATEST='1.3.0';   // keep in step with VERSION in docs/engine/ripstitch_engine.py
 const WIN_SETUP='https://github.com/mattymattmattmatt/RipStitch/releases/download/engine-latest/RipStitch-Setup.exe';
 const WIN_SIZE='95 MB';
 const DESKTOP_EXE='https://github.com/mattymattmattmatt/RipStitch/releases/download/desktop-latest/RipStitch.exe';
@@ -65,7 +65,7 @@ async function connect(user){
     onHealth(h);E.tries=0;
     if(E.state!=='online'){
       const back=E.wasOnline;setState('online');E.wasOnline=true;LS.set('engine.ok',1);
-      if(user||back)toast(back?'Engine reconnected':'Engine connected',{kind:'ok',sub:h.ytdlp?`yt-dlp ${h.ytdlp} · saving to ${h.out_dir}`:'yt-dlp still needs installing — open Setup.'});
+      if(user||back)toast(back?'Engine reconnected':'Engine connected',{kind:'ok',sub:h.ytdlp?`yt-dlp ${h.ytdlp} · saving to ${h.out_dir}`:'yt-dlp still needs installing: open Settings → Engine.'});
       if(R.pending){const u=R.pending;R.pending=null;read(u)}
     }
     pollJobs(true);
@@ -78,8 +78,8 @@ async function connect(user){
     if(st!=='denied')E.timer=setTimeout(()=>connect(false),document.hidden?15000:E.tries<30?3000:12000);
   }
 }
-function onHealth(h){E.health=h;E.token=h.token;E.cfg=h.config;R.lastHealth=Date.now();renderTop();renderEngine();if($('#dlgSet').open&&!$('#dlgSet').dataset.dirty)renderSettings()}
-function setState(s){if(E.state===s)return;E.state=s;renderTop();renderEngine();renderJobs();if(s!=='online'){clearTimeout(R.pollT)}}
+function onHealth(h){E.health=h;E.token=h.token;E.cfg=h.config;R.lastHealth=Date.now();renderTop();renderEngine();Settings.refresh('downloads');Settings.refresh('engine')}
+function setState(s){if(E.state===s)return;E.state=s;renderTop();renderEngine();renderJobs();Settings.refresh('downloads');Settings.refresh('engine');if(s!=='online'){clearTimeout(R.pollT)}}
 async function refreshHealth(){try{onHealth(await api('/api/health'))}catch(e){if(e.offline)connect(false)}}
 
 /* ---------- top bar ---------- */
@@ -87,7 +87,7 @@ function renderTop(){
   const dot=$('#engDot'),txt=$('#engTxt'),h=E.health,on=E.state==='online';
   dot.className='dot '+({online:'on',checking:'wait',offline:'wait',idle:'',denied:'bad',untrusted:'bad'}[E.state]||'');
   txt.textContent=on?(h.ytdlp?`yt-dlp ${h.ytdlp}`:'yt-dlp missing'):{checking:'Connecting…',offline:'Engine offline',idle:'Connect engine',denied:'Engine blocked',untrusted:'Engine untrusted'}[E.state];
-  $('#engPill').dataset.tip=on?`RipStitch Engine ${h.version} · click for setup`:'Rip needs the RipStitch Engine · click to set up';
+  $('#engPill').dataset.tip=on?`RipStitch Engine ${h.version} · click for details`:'Rip needs the RipStitch Engine · click to set up';
   const ff=$('#tcFF'),fr=$('#tcFree');ff.hidden=fr.hidden=!on;
   if(on){ff.className='tchip hide-md '+(h.ffmpeg?'good':'bad');ff.innerHTML=`ffmpeg <b>${h.ffmpeg?'ready':'missing'}</b>`;fr.innerHTML=`<b>${h.free_bytes!=null?fmtBytes(h.free_bytes):'—'}</b> free`;$('#rFolderTxt').textContent='\u200E'+h.out_dir+'\u200E'}
 }
@@ -217,7 +217,7 @@ urlIn.addEventListener('input',()=>{fault(null);suggest()});
 urlIn.addEventListener('keydown',e=>{if(e.key==='Escape'){urlIn.blur()}});
 $('#rPl').onchange=e=>{R.pl=e.target.checked;suggest()};
 $('#rAuto').checked=R.auto;
-$('#rAuto').onchange=e=>{R.auto=e.target.checked;LS.set('rip.auto',R.auto);toast(R.auto?'Finished downloads will drop onto the Stitch timeline':'Auto-send to Stitch is off',{kind:R.auto?'ok':'info'})};
+$('#rAuto').onchange=e=>setAuto(e.target.checked);
 if(navigator.clipboard?.readText){$('#rPaste').hidden=false;$('#rPaste').onclick=pasteAndRead}
 async function pasteAndRead(){
   try{const t=await navigator.clipboard.readText();const u=findUrl(t);if(!u)return toast('No link on the clipboard',{kind:'warn'});App.go('rip');read(u)}
@@ -301,7 +301,7 @@ function renderVideo(r){
   const notes=[];
   if(r.is_live)notes.push(`<div class="callout bad">${ic('pulse')}<div><b>Live right now.</b> Downloading records until the stream ends or you press Stop.</div></div>`);
   if(!ff&&(r.formats||[]).some(f=>f.needs_audio))notes.push(`<div class="callout">${ic('warn')}<div>FFmpeg isn’t installed, so only streams with built-in sound are offered. That’s usually 720p or lower on YouTube.</div></div>`);
-  if(/^Youtube/.test(r.extractor||'')&&!h.js_runtime&&(r.formats||[]).filter(f=>!f.video_absent).length<4)notes.push(`<div class="callout info">${ic('info')}<div>YouTube offered only a few streams. Installing <b>Deno</b> on this computer unlocks the full list (see Setup).</div></div>`);
+  if(/^Youtube/.test(r.extractor||'')&&!h.js_runtime&&(r.formats||[]).filter(f=>!f.video_absent).length<4)notes.push(`<div class="callout info">${ic('info')}<div>YouTube offered only a few streams. Installing <b>Deno</b> on this computer unlocks the full list (see Settings → Engine).</div></div>`);
   const fm=r.formats||[];
   const picks=[];
   const best=choose(r,null);
@@ -737,24 +737,33 @@ async function selfUpdate(btn){
 }
 
 /* ============================================================
-   SETTINGS
+   SETTINGS — the Downloads and Engine sections of the Settings window
    ============================================================ */
-function renderSettings(){
-  const c=E.cfg,h=E.health,body=$('#setBody');
-  if(!c){body.innerHTML='<p class="note">Connect the engine to change its settings.</p>';return}
-  const opt=(arr,v)=>arr.map(x=>`<option value="${esc(x)}" ${x===v?'selected':''}>${esc(x||'none')}</option>`).join('');
+function setAuto(on,quiet){
+  R.auto=!!on;LS.set('rip.auto',R.auto);$('#rAuto').checked=R.auto;
+  if(!quiet)toast(R.auto?'Finished downloads will drop onto the Stitch timeline':'Auto-send to Stitch is off',{kind:R.auto?'ok':'info'});
+}
+function offlineCallout(){
+  return `<div class="callout info">${ic('plug')}<div><b>${DESKTOP?'The engine isn’t running right now':'Rip’s engine isn’t connected'}</b><br>
+    ${DESKTOP?'It normally starts with the app. Try reconnecting.':'Download settings live in the RipStitch Engine on your computer, so they apply to every download.'}<br>
+    <button class="btn sm rip" data-sa="connect">${ic('plug')}${DESKTOP?'Reconnect':'Connect or set up the engine'}</button></div></div>`;
+}
+function renderDownloads(el){
+  const c=E.cfg,h=E.health;
+  const auto=`<label class="set-row"><div><b>Send finished downloads to Stitch</b><span>Each finished video drops straight onto the Stitch timeline.</span></div><input type="checkbox" class="sw" data-p="auto"${R.auto?' checked':''}></label>`;
+  el.onclick=onSetClick;
+  if(E.state!=='online'||!c||!h){el.innerHTML=offlineCallout()+'<div class="sub">This device</div>'+auto;return}
+  const opt=(arr,v,names={})=>arr.map(x=>`<option value="${esc(x)}" ${x===v?'selected':''}>${esc(names[x]||x||'none')}</option>`).join('');
   const sw=(k,label,tip)=>`<label class="swrow"${tip?` data-tip="${esc(tip)}"`:''}><span>${label}</span><input type="checkbox" class="sw" data-k="${k}" ${c[k]?'checked':''}></label>`;
-  body.innerHTML=`
+  el.innerHTML=`
+    <div class="fld"><label for="sOut">Save downloads to</label>
+      <div class="folder"><input class="inp" id="sOut" data-k="out_dir" value="${esc(c.out_dir)}" spellcheck="false" aria-label="Download folder"><button class="btn" data-sa="browse">${ic('open')}Browse…</button><button class="btn flat io" data-sa="reveal" data-tip="Open the current folder">${ic('ext')}</button></div>
+      <span class="hint">New downloads land here. It’s created if it doesn’t exist${h.free_bytes!=null?` · ${fmtBytes(h.free_bytes)} free`:''}.</span></div>
+    <div class="sub">Files</div>
     <div class="set-grid">
-      <div class="fld" style="grid-column:1/-1"><label for="sOut">Save downloads to</label><div style="display:flex;gap:6px"><input class="inp" id="sOut" data-k="out_dir" value="${esc(c.out_dir)}" spellcheck="false"><button class="btn" data-sa="reveal">${ic('open')}Open</button></div><span class="hint">A folder on the computer running the engine. Created if missing.</span></div>
       <div class="fld" style="grid-column:1/-1"><label for="sTpl">File names</label><input class="inp" id="sTpl" data-k="template" value="${esc(c.template)}" spellcheck="false"><span class="hint">yt-dlp template. Default: <span class="mono">%(title).150B [%(id)s].%(ext)s</span>. Use <span class="mono">%(uploader)s/…</span> for a folder per channel.</span></div>
       <div class="fld"><label for="sMerge">Video container</label><select class="inp" id="sMerge" data-k="merge_format">${opt(h.choices.merge_format,c.merge_format)}</select><span class="hint">MP4 plays everywhere. MKV holds anything.</span></div>
       <div class="fld"><label for="sAudio">Audio-only format</label><select class="inp" id="sAudio" data-k="audio_codec">${opt(h.choices.audio_codec,c.audio_codec)}</select></div>
-      <div class="fld"><label for="sWorkers">Downloads at once</label><input class="inp" type="number" min="1" max="8" id="sWorkers" data-k="workers" value="${c.workers}"></div>
-      <div class="fld"><label for="sFrag">Connections per download</label><input class="inp" type="number" min="1" max="16" id="sFrag" data-k="frag_workers" value="${c.frag_workers}"><span class="hint">Speeds up streaming sites (HLS/DASH).</span></div>
-      <div class="fld"><label for="sRate">Speed cap</label><input class="inp" id="sRate" data-k="rate_limit" value="${esc(c.rate_limit)}" placeholder="e.g. 5M (blank = no cap)" spellcheck="false"></div>
-      <div class="fld"><label for="sCookies">Sign in using browser cookies</label><select class="inp" id="sCookies" data-k="cookies_from">${opt(h.choices.cookies_from,c.cookies_from)}</select><span class="hint">For videos your own account can already see.</span></div>
-      <div class="fld" style="grid-column:1/-1"><label for="sSubs">Subtitle languages</label><input class="inp" id="sSubs" data-k="sub_langs" value="${esc(c.sub_langs)}" spellcheck="false"><span class="hint">Comma separated, wildcards allowed: <span class="mono">en.*,es,ja</span></span></div>
     </div>
     <div class="sub">Extras</div>
     <div class="set-checks">
@@ -767,26 +776,71 @@ function renderSettings(){
       ${sw('archive','Skip anything already downloaded','Remembers every video ID it has saved')}
       ${sw('auto_update','Keep yt-dlp up to date automatically','Checks once a day while nothing is downloading. Sites change often, and new yt-dlp releases keep them working.')}
     </div>
-    <div class="sub">Engine</div>
+    <div class="sub">Speed and sign-in</div>
+    <div class="set-grid">
+      <div class="fld"><label for="sWorkers">Downloads at once</label><input class="inp" type="number" min="1" max="8" id="sWorkers" data-k="workers" value="${c.workers}"></div>
+      <div class="fld"><label for="sFrag">Connections per download</label><input class="inp" type="number" min="1" max="16" id="sFrag" data-k="frag_workers" value="${c.frag_workers}"><span class="hint">Speeds up streaming sites (HLS/DASH).</span></div>
+      <div class="fld"><label for="sRate">Speed cap</label><input class="inp" id="sRate" data-k="rate_limit" value="${esc(c.rate_limit)}" placeholder="e.g. 5M (blank = no cap)" spellcheck="false"></div>
+      <div class="fld"><label for="sCookies">Sign in using browser cookies</label><select class="inp" id="sCookies" data-k="cookies_from">${opt(h.choices.cookies_from,c.cookies_from)}</select><span class="hint">For videos your own account can already see.</span></div>
+      <div class="fld" style="grid-column:1/-1"><label for="sSubs">Subtitle languages</label><input class="inp" id="sSubs" data-k="sub_langs" value="${esc(c.sub_langs)}" spellcheck="false"><span class="hint">Comma separated, wildcards allowed: <span class="mono">en.*,es,ja</span></span></div>
+    </div>
+    <div class="sub">This device</div>${auto}`;
+}
+async function saveDownloads(el){
+  const a=el.querySelector('[data-p=auto]');if(a&&a.checked!==R.auto)setAuto(a.checked,true);
+  const fields=el.querySelectorAll('[data-k]');if(!fields.length||E.state!=='online')return null;
+  const cfg={};
+  fields.forEach(f=>{const k=f.dataset.k;cfg[k]=f.type==='checkbox'?f.checked:f.type==='number'?+f.value:f.value.trim()});
+  const changed=Object.keys(cfg).filter(k=>String(cfg[k])!==String(E.cfg?.[k]));
+  if(!changed.length)return null;
+  let d;
+  try{d=await api('/api/settings',{config:cfg})}catch(e){e.section='downloads';throw e}
+  E.cfg=d.config;refreshHealth();if(R.cur?.kind==='video')renderVideo(R.cur);
+  return changed.includes('out_dir')?`Downloads now save to ${d.config.out_dir}`:'Download settings saved. They apply to new downloads.';
+}
+function renderEngineSec(el){
+  const h=E.health;el.onclick=onSetClick;
+  const app=DESKTOP?`<dt>App</dt><dd>RipStitch Desktop ${esc((navigator.userAgent.match(/RipStitchDesktop\/([\d.]+)/)||[])[1]||'')}</dd><dd></dd>`:'';
+  if(E.state!=='online'||!h){el.innerHTML=offlineCallout()+(app?`<dl class="set-info" style="margin-top:12px">${app}</dl>`:'');return}
+  el.innerHTML=`
     <dl class="set-info">
-      <dt>Address</dt><dd>${esc(E.base)}</dd><dd></dd>
+      ${app}
       <dt>Engine</dt><dd>RipStitch Engine ${esc(h.version)} · ${esc({'windows-app':'Windows app','script':'installed by script',desktop:'built into RipStitch Desktop',manual:'Python script'}[h.install]||'Python script')} · Python ${esc(h.python)}</dd><dd>${h.install==='desktop'?'':vcmp(h.version,ENGINE_LATEST)<0?`<button class="btn sm rip" data-sa="selfupdate">${ic('reset')}Update to ${ENGINE_LATEST}</button>`:`<button class="btn sm danger" data-sa="stop" data-tip="Stops it until you next sign in, or until you start it again">${ic('stop')}Stop</button>`}</dd>
       <dt>yt-dlp</dt><dd>${h.ytdlp?esc(h.ytdlp)+(h.runtime==='private'?' · private runtime':''):'<span style="color:var(--cut)">not installed</span>'}</dd><dd><button class="btn sm${h.ytdlp?'':' rip'}" data-sa="update">${ic(h.ytdlp?'reset':'dl')}${h.ytdlp?'Update':'Install'}</button></dd>
       <dt>FFmpeg</dt><dd>${h.ffmpeg?esc(h.ffmpeg_version):'<span style="color:var(--cut)">missing</span>: needed for HD merges, audio conversion and section clips'}</dd><dd></dd>
       <dt>JS runtime</dt><dd>${h.js_runtime?esc(h.js_runtime):'<span style="color:var(--warn)">none</span>: install Deno for full YouTube support'}</dd><dd></dd>
+      <dt>Address</dt><dd>${esc(E.base)}</dd><dd></dd>
       ${h.log_file?`<dt>Log</dt><dd>${esc(h.log_file)}</dd><dd></dd>`:''}
     </dl>
+    <p class="note" style="margin-top:12px">${h.config?.auto_update!==false?'yt-dlp updates itself once a day while nothing is downloading.':'Automatic yt-dlp updates are off (Downloads → Extras).'}</p>
     <div id="setOut"></div>`;
-  delete $('#dlgSet').dataset.dirty;
 }
-function openSettings(){
-  if(E.state!=='online'){App.go('rip');connect(true);$('#rCard')?.scrollIntoView({behavior:'smooth'});return}
-  renderSettings();$('#setMsg').textContent='';$('#dlgSet').showModal();
+/** Ask for a folder: the desktop app shows the Windows picker; in a browser the engine shows one on this computer. */
+async function pickFolder(start,title){
+  if(Host){const r=await Host.call('pickFolder',{start:start||'',title});if(r.error)throw new Error(r.error);return r.path||null}
+  if(E.state!=='online')throw new Error('Connect the engine first');
+  try{return(await api('/api/pick-folder',{start:start||'',title},{timeout:15*60000})).path||null}
+  catch(e){
+    if(e.status===404)throw new Error('Your engine is too old to show a folder picker. Update it in Settings → Engine, or type the folder path.');
+    throw e;
+  }
 }
-$('#setBody').addEventListener('input',()=>{$('#dlgSet').dataset.dirty='1'});
-$('#setBody').addEventListener('click',async e=>{
+async function browseFolder(btn){
+  const inp=$('#sOut');if(!inp)return;
+  btn.disabled=true;$('#setMsg').textContent='Choose a folder in the window that opened…';
+  try{
+    const p=await pickFolder(inp.value.trim(),'Choose where RipStitch saves downloads');
+    inp.dataset.picked=p||'(cancelled)';
+    if(p&&p!==inp.value){inp.value=p;inp.classList.add('picked');Settings.dirty(inp);$('#setMsg').textContent='Click Save to use this folder.'}
+    else $('#setMsg').textContent='';
+  }catch(e){$('#setMsg').textContent='';toast('Couldn’t open the folder picker',{kind:'err',sub:e.message,ms:9000})}
+  finally{btn.disabled=false}
+}
+async function onSetClick(e){
   const b=e.target.closest('[data-sa]');if(!b)return;
   const a=b.dataset.sa;
+  if(a==='browse')return browseFolder(b);
+  if(a==='connect'){$('#dlgSet').close();App.go('rip');connect(true);setTimeout(()=>$('#rCard')?.scrollIntoView({behavior:'smooth',block:'start'}),60);return}
   if(a==='reveal')return api('/api/reveal',{}).catch(err=>toast(err.message,{kind:'err'}));
   if(a==='selfupdate'){$('#dlgSet').close();return selfUpdate()}
   if(a==='stop'){
@@ -796,28 +850,23 @@ $('#setBody').addEventListener('click',async e=>{
     const how={'windows-app':'It starts again the next time you sign in, or from “Start the engine” in your Start menu.',script:'It starts again the next time you log in.'}[E.health?.install]||'Run ripstitch_engine.py again to restart it.';
     return toast('Engine stopped',{sub:how});
   }
-  updateYtdlp(b);
-});
-$('#setSave').onclick=async()=>{
-  const cfg={};
-  $$('#setBody [data-k]').forEach(el=>{const k=el.dataset.k;cfg[k]=el.type==='checkbox'?el.checked:el.type==='number'?+el.value:el.value.trim()});
-  const btn=$('#setSave');btn.disabled=true;$('#setMsg').textContent='Saving…';
-  try{const d=await api('/api/settings',{config:cfg});E.cfg=d.config;delete $('#dlgSet').dataset.dirty;$('#dlgSet').close();toast('Setup saved',{kind:'ok',sub:'Applies to new downloads.'});refreshHealth();if(R.cur?.kind==='video')renderVideo(R.cur)}
-  catch(e){$('#setMsg').innerHTML=`<span style="color:var(--cut)">${esc(e.message)}</span>`}
-  finally{btn.disabled=false}
-};
+  if(a==='update')updateYtdlp(b);
+}
+Settings.add({id:'downloads',order:10,title:'Downloads',icon:'dl',sub:'Where Rip saves files and how it downloads them. Stored by the engine, so they apply to every download.',render:renderDownloads,save:saveDownloads});
+Settings.add({id:'engine',order:40,title:'Engine',icon:'plug',sub:'The helper that runs yt-dlp and FFmpeg on this computer.',render:renderEngineSec});
+function openSettings(id){Settings.open(id||'downloads')}
 async function updateYtdlp(btn){
   if(E.state!=='online')return;
   const t=toast(E.health?.ytdlp?'Updating yt-dlp…':'Installing yt-dlp…',{ms:0,sub:'This can take a minute.'});
   if(btn)btn.disabled=true;
-  try{const d=await api('/api/update',{},{timeout:900000});t.done(d.note||'Done',{kind:'ok'});await refreshHealth();renderSettings()}
+  try{const d=await api('/api/update',{},{timeout:900000});t.done(d.note||'Done',{kind:'ok'});await refreshHealth();Settings.refresh('engine')}
   catch(e){t.done('yt-dlp install failed',{kind:'err',sub:trunc(e.message,400),ms:15000});const o=$('#setOut');if(o)o.innerHTML=`<pre class="set-out">${esc(e.message)}</pre>`}
   finally{if(btn)btn.disabled=false}
 }
-$('#bRipSetup').onclick=openSettings;
+$('#rFolderSet').onclick=()=>openSettings('downloads');
 if(!DESKTOP&&/Windows/.test(navigator.userAgent))$('#bGetApp').hidden=false;
 $('#bGetApp').onclick=()=>toast('Downloading RipStitch.exe (about 150 MB)',{kind:'ok',sub:'If your browser says it “isn’t commonly downloaded”, choose Keep. If Windows says “Windows protected your PC”, click More info → Run anyway.',ms:12000});
-$('#engPill').onclick=()=>E.state==='online'?openSettings():(App.go('rip'),connect(true),setTimeout(()=>$('#rCard')?.scrollIntoView({behavior:'smooth',block:'start'}),60));
+$('#engPill').onclick=()=>E.state==='online'?openSettings('engine'):(App.go('rip'),connect(true),setTimeout(()=>$('#rCard')?.scrollIntoView({behavior:'smooth',block:'start'}),60));
 
 /* ============================================================
    KEYS + COMMANDS
@@ -837,7 +886,9 @@ const inRip=fn=>()=>{App.go('rip');setTimeout(fn,30)};
   {id:'rp.focus',title:'Type a link',icon:'link',keys:['/'],run:inRip(()=>{urlIn.focus();urlIn.select()})},
   {id:'rp.pl',title:'Toggle whole-playlist mode',icon:'list',run:inRip(()=>{setPl(!R.pl);toast(R.pl?'Playlist mode on: links read every video':'Playlist mode off')})},
   {id:'rp.auto',title:'Toggle “Send to Stitch when done”',icon:'send',run:()=>{$('#rAuto').checked=!R.auto;$('#rAuto').dispatchEvent(new Event('change'))}},
-  {id:'rp.setup',title:'Rip setup and engine…',icon:'sliders',words:'settings preferences folder',run:openSettings},
+  {id:'rp.setup',title:'Download settings…',icon:'gear',words:'settings preferences setup quality container cookies',run:()=>openSettings('downloads')},
+  {id:'rp.where',title:'Change the download folder…',icon:'open',words:'save location directory browse',run:()=>{openSettings('downloads');setTimeout(()=>$('#sOut')?.focus(),80)}},
+  {id:'rp.engine',title:'Engine status and updates…',icon:'plug',words:'yt-dlp ffmpeg version',run:()=>openSettings('engine')},
   {id:'rp.connect',title:'Connect to the engine',icon:'plug',when:()=>E.state!=='online',run:inRip(()=>connect(true))},
   {id:'rp.folder',title:'Open the download folder',icon:'open',when:()=>E.state==='online',run:()=>api('/api/reveal',{}).catch(e=>toast(e.message,{kind:'err'}))},
   {id:'rp.send',title:'Send finished downloads to Stitch',icon:'cut',when:()=>sendable().length>0,run:()=>toStitch(sendable())},

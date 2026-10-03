@@ -17,6 +17,8 @@ into a private environment that never touches your system Python.
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import json
 import mimetypes
 import os
@@ -38,7 +40,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 DEFAULT_PORT = 8731
 APP_URL = os.environ.get("RIPSTITCH_APP_URL") or "https://mattymattmattmatt.github.io/RipStitch/"
 TRUSTED_ORIGINS = {"https://mattymattmattmatt.github.io"}
@@ -1139,6 +1141,270 @@ def stop_running(port: int) -> bool:
     return True
 
 
+# --------------------------------------------------------------------------
+# Folder picker: Settings → Downloads → Browse… shows the computer's own folder window.
+# --------------------------------------------------------------------------
+class PickerUnavailable(Exception):
+    """This computer has no folder window we can show (no desktop, or no zenity/kdialog)."""
+
+
+PICKER_LOCK = threading.Lock()
+# Same text as desktop/FolderPicker.cs; Windows compiles it through PowerShell once and caches the DLL.
+PICKER_CS = r'''// The modern Windows "Select Folder" dialog (IFileOpenDialog with FOS_PICKFOLDERS).
+// Shared by RipStitch Desktop and the RipStitch Engine, which compiles this same text through
+// PowerShell's Add-Type (C# 5), so it sticks to C# 5. tests/test_engine.py keeps the two copies equal.
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Windows.Forms;
+
+namespace RipStitch
+{
+    public static class FolderPicker
+    {
+        /// <summary>Shows the picker over a window. Returns the chosen folder, or null if cancelled.
+        /// autoAcceptMs is only for automated tests: it presses Select Folder after that delay.</summary>
+        public static string Pick(IntPtr owner, string start, string title, int autoAcceptMs)
+        {
+            IFileDialog dlg = (IFileDialog)new FileOpenDialogCom();
+            Timer timer = null;
+            try
+            {
+                uint opts;
+                dlg.GetOptions(out opts);
+                dlg.SetOptions(opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_NOCHANGEDIR);
+                if (!string.IsNullOrEmpty(title)) dlg.SetTitle(title);
+                IShellItem folder = ItemFor(start);
+                if (folder != null) dlg.SetFolder(folder);
+                if (autoAcceptMs > 0)
+                {
+                    int ticks = 0;
+                    timer = new Timer();
+                    timer.Interval = autoAcceptMs;
+                    timer.Tick += delegate
+                    {
+                        ticks++;
+                        IntPtr h = FindDialog();
+                        if (ticks <= 3 && h != IntPtr.Zero) PostMessage(h, WM_COMMAND, (IntPtr)IDOK, IntPtr.Zero);
+                        else if (ticks > 3) { timer.Stop(); dlg.Close(ERROR_CANCELLED); }
+                    };
+                    timer.Start();
+                }
+                int hr = dlg.Show(owner);
+                if (hr == ERROR_CANCELLED) return null;
+                if (hr != 0) Marshal.ThrowExceptionForHR(hr);
+                IShellItem result;
+                dlg.GetResult(out result);
+                string path;
+                result.GetDisplayName(SIGDN_FILESYSPATH, out path);
+                return path;
+            }
+            finally
+            {
+                if (timer != null) timer.Dispose();
+                Marshal.ReleaseComObject(dlg);
+            }
+        }
+
+        /// <summary>For a background process (the engine): the picker above every other window,
+        /// with a taskbar button so it can't get lost behind the browser.</summary>
+        public static string PickOnTop(string start, string title, int autoAcceptMs)
+        {
+            using (Form f = new Form())
+            {
+                f.Text = string.IsNullOrEmpty(title) ? "Choose a folder" : title;
+                f.FormBorderStyle = FormBorderStyle.None;
+                f.StartPosition = FormStartPosition.CenterScreen;
+                f.Size = new System.Drawing.Size(1, 1);
+                f.Opacity = 0;
+                f.TopMost = true;
+                f.Show();
+                SetForegroundWindow(f.Handle);
+                return Pick(f.Handle, start, title, autoAcceptMs);
+            }
+        }
+
+        static IShellItem ItemFor(string path)
+        {
+            try
+            {
+                while (!string.IsNullOrEmpty(path) && !System.IO.Directory.Exists(path)) path = System.IO.Path.GetDirectoryName(path);
+                if (string.IsNullOrEmpty(path)) return null;
+                Guid iid = typeof(IShellItem).GUID;
+                IShellItem item;
+                SHCreateItemFromParsingName(path, IntPtr.Zero, ref iid, out item);
+                return item;
+            }
+            catch { return null; }
+        }
+
+        static IntPtr FindDialog()
+        {
+            IntPtr found = IntPtr.Zero;
+            EnumThreadWindows(GetCurrentThreadId(), delegate (IntPtr h, IntPtr l)
+            {
+                StringBuilder cls = new StringBuilder(64);
+                GetClassName(h, cls, cls.Capacity);
+                if (cls.ToString() == "#32770" && IsWindowVisible(h)) { found = h; return false; }
+                return true;
+            }, IntPtr.Zero);
+            return found;
+        }
+
+        delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+        [DllImport("user32.dll")] static extern bool EnumThreadWindows(uint threadId, EnumWindowsProc callback, IntPtr lParam);
+        [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hWnd, StringBuilder name, int max);
+        [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
+        [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+        static extern void SHCreateItemFromParsingName(string path, IntPtr bindCtx, ref Guid riid, [MarshalAs(UnmanagedType.Interface)] out IShellItem item);
+
+        const uint FOS_NOCHANGEDIR = 0x8, FOS_PICKFOLDERS = 0x20, FOS_FORCEFILESYSTEM = 0x40, FOS_PATHMUSTEXIST = 0x800;
+        const uint SIGDN_FILESYSPATH = 0x80058000;
+        const uint WM_COMMAND = 0x0111;
+        const int IDOK = 1;
+        const int ERROR_CANCELLED = unchecked((int)0x800704C7);
+
+        [ComImport, Guid("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7")]
+        class FileOpenDialogCom { }
+
+        [ComImport, Guid("42f85136-db7e-439c-85f1-e4075d135fc8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IFileDialog
+        {
+            [PreserveSig] int Show(IntPtr parent);
+            void SetFileTypes(uint count, IntPtr filterSpecs);
+            void SetFileTypeIndex(uint index);
+            void GetFileTypeIndex(out uint index);
+            void Advise(IntPtr events, out uint cookie);
+            void Unadvise(uint cookie);
+            void SetOptions(uint options);
+            void GetOptions(out uint options);
+            void SetDefaultFolder(IShellItem item);
+            void SetFolder(IShellItem item);
+            void GetFolder(out IShellItem item);
+            void GetCurrentSelection(out IShellItem item);
+            void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string name);
+            void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string name);
+            void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string title);
+            void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string text);
+            void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string label);
+            void GetResult(out IShellItem item);
+            void AddPlace(IShellItem item, int where);
+            void SetDefaultExtension([MarshalAs(UnmanagedType.LPWStr)] string extension);
+            void Close(int hr);
+            void SetClientGuid(ref Guid guid);
+            void ClearClientData();
+            void SetFilter(IntPtr filter);
+        }
+
+        [ComImport, Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IShellItem
+        {
+            void BindToHandler(IntPtr bindCtx, ref Guid bhid, ref Guid riid, out IntPtr ppv);
+            void GetParent(out IShellItem parent);
+            void GetDisplayName(uint sigdn, [MarshalAs(UnmanagedType.LPWStr)] out string name);
+            void GetAttributes(uint mask, out uint attributes);
+            void Compare(IShellItem other, uint hint, out int order);
+        }
+    }
+}
+'''
+PICKER_PS = r"""
+$ErrorActionPreference = 'Stop'
+try {
+  $dll = $env:RS_PICK_DLL
+  $loaded = $false
+  if ($dll -and (Test-Path -LiteralPath $dll)) { try { Add-Type -Path $dll; $loaded = $true } catch { } }
+  if (-not $loaded) {
+    try { Add-Type -TypeDefinition $env:RS_PICK_CS -ReferencedAssemblies System.Windows.Forms, System.Drawing -OutputAssembly $dll; Add-Type -Path $dll }
+    catch { Add-Type -TypeDefinition $env:RS_PICK_CS -ReferencedAssemblies System.Windows.Forms, System.Drawing }
+  }
+  $p = [RipStitch.FolderPicker]::PickOnTop($env:RS_PICK_START, $env:RS_PICK_TITLE, [int]$env:RS_PICK_AUTO)
+  if ($p) { [Console]::Out.Write('OK:' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($p))) } else { [Console]::Out.Write('CANCEL') }
+} catch { [Console]::Out.Write('ERR:' + $_.Exception.Message) }
+"""
+
+
+def nearest_dir(p: str) -> str:
+    """The folder itself if it exists, else its closest existing parent, else home."""
+    try:
+        q = Path(os.path.expandvars(os.path.expanduser(p))).resolve() if p else Path.home()
+    except (OSError, RuntimeError, ValueError):
+        q = Path.home()
+    while not q.is_dir() and q != q.parent:
+        q = q.parent
+    return str(q if q.is_dir() else Path.home())
+
+
+def pick_folder(start: str, title: str) -> str | None:
+    """Show this computer's folder picker. Returns the chosen folder, or None if cancelled."""
+    start, title = nearest_dir(start), (title or "Choose a folder")[:120]
+    if not PICKER_LOCK.acquire(blocking=False):
+        raise RuntimeError("A folder window is already open. Pick a folder there first.")
+    try:
+        if IS_WIN:
+            return _pick_windows(start, title)
+        if IS_MAC:
+            return _pick_mac(start, title)
+        return _pick_linux(start, title)
+    finally:
+        PICKER_LOCK.release()
+
+
+def _pick_windows(start: str, title: str) -> str | None:
+    ps = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+    cache = config_dir()
+    cache.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha1(PICKER_CS.encode()).hexdigest()[:10]
+    env = dict(os.environ, RS_PICK_CS=PICKER_CS, RS_PICK_START=start, RS_PICK_TITLE=title,
+               RS_PICK_AUTO=os.environ.get("RIPSTITCH_PICKER_AUTO_MS", "0"),
+               RS_PICK_DLL=str(cache / f"folder-picker-{digest}.dll"))
+    r = subprocess.run([str(ps) if ps.exists() else "powershell", "-NoProfile", "-STA", "-ExecutionPolicy", "Bypass",
+                        "-EncodedCommand", base64.b64encode(PICKER_PS.encode("utf-16-le")).decode()],
+                       capture_output=True, text=True, timeout=1800, env=env, **NO_WINDOW)
+    out = (r.stdout or "").strip()
+    if out.startswith("OK:"):
+        return base64.b64decode(out[3:]).decode("utf-8")
+    if out == "CANCEL":
+        return None
+    why = out[4:] if out.startswith("ERR:") else (r.stderr or out or f"exit {r.returncode}").strip().splitlines()[-1]
+    raise RuntimeError(f"The folder window failed: {why[:300]}")
+
+
+def _pick_mac(start: str, title: str) -> str | None:
+    lines = ["on run argv", "activate", "try",
+             "set f to choose folder with prompt (item 2 of argv) default location (POSIX file (item 1 of argv))",
+             "on error number -128", 'return "CANCEL"', "end try", 'return "OK:" & POSIX path of f', "end run"]
+    args = ["osascript"] + [x for line in lines for x in ("-e", line)] + [start, title]
+    r = subprocess.run(args, capture_output=True, text=True, timeout=1800)
+    out = (r.stdout or "").strip()
+    if out.startswith("OK:"):
+        p = out[3:]
+        return p.rstrip("/") or "/"
+    if out == "CANCEL":
+        return None
+    raise RuntimeError(f"The folder window failed: {(r.stderr or out).strip()[:300]}")
+
+
+def _pick_linux(start: str, title: str) -> str | None:
+    if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        raise PickerUnavailable("This computer has no desktop to show a folder window on, so type the folder path instead.")
+    for tool, args in (("zenity", ["--file-selection", "--directory", "--title", title, "--filename", start.rstrip("/") + "/"]),
+                       ("kdialog", ["--getexistingdirectory", start, "--title", title])):
+        exe = shutil.which(tool)
+        if not exe:
+            continue
+        r = subprocess.run([exe] + args, capture_output=True, text=True, timeout=1800)
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip()
+        if r.returncode == 1:
+            return None
+        raise RuntimeError(f"The folder window failed: {(r.stderr or '').strip()[:300] or tool}")
+    raise PickerUnavailable("No folder window is available here (install zenity), so type the folder path instead.")
+
+
 def reveal(path: str | None):
     with CFG_LOCK:
         out = CFG["out_dir"]
@@ -1441,6 +1707,14 @@ class Handler(BaseHTTPRequestHandler):
                 RESTART["now"] = True
                 threading.Thread(target=SERVER.shutdown, daemon=True).start()
                 return
+            if path == "/api/pick-folder":
+                with CFG_LOCK:
+                    out_dir = CFG["out_dir"]
+                try:
+                    chosen = pick_folder(str(body.get("start") or out_dir), str(body.get("title") or ""))
+                except PickerUnavailable as e:
+                    return self._json(501, {"ok": False, "error": str(e)})
+                return self._json(200, {"ok": True, "path": chosen, "cancelled": chosen is None})
             if path == "/api/reveal":
                 p = body.get("path")
                 if body.get("id"):

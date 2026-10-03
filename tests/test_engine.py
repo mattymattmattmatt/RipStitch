@@ -172,3 +172,15 @@ class InstallerHelperTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FolderPickerTests(unittest.TestCase):
+    def test_engine_and_desktop_share_one_picker(self):
+        cs = (ENGINE.parent.parent.parent / "desktop" / "FolderPicker.cs").read_text()
+        self.assertEqual(eng.PICKER_CS, cs, "copy desktop/FolderPicker.cs into PICKER_CS in the engine")
+
+    def test_nearest_existing_folder(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(eng.nearest_dir(str(Path(d) / "not" / "there")), str(Path(d).resolve()))
+        self.assertEqual(eng.nearest_dir(""), str(Path.home()))

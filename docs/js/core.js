@@ -80,10 +80,10 @@ function toast(msg,o={}){
 }
 
 /* ---------- tooltips ---------- */
-const tipEl=$('#tip'),dtip=$('#dtip');let tipT=0,tipFor=null;
+const tipEl=$('#tip'),dtip=$('#dtip');let tipT=0,tipFor=null,TIPS=LS.get('tips',true);
 document.addEventListener('pointerover',e=>{
   const t=e.target.closest?.('[data-tip]');if(t===tipFor)return;hideTip();
-  if(!t||e.pointerType==='touch'||document.body.classList.contains('trimming'))return;
+  if(!t||!TIPS||e.pointerType==='touch'||document.body.classList.contains('trimming'))return;
   tipFor=t;tipT=setTimeout(()=>showTip(t),450);
 });
 document.addEventListener('pointerdown',hideTip,true);addEventListener('blur',hideTip);addEventListener('wheel',hideTip,{passive:true});
@@ -219,11 +219,87 @@ const Palette=(()=>{
 })();
 
 /* ============================================================
+   DESKTOP BRIDGE — asks the RipStitch window (WebView2) for things
+   a web page can't do itself, like the Windows folder picker.
+   ============================================================ */
+const Host=(()=>{
+  const wv=DESKTOP&&window.chrome?.webview;if(!wv)return null;
+  let n=0;const wait=new Map();
+  wv.addEventListener('message',e=>{const m=e.data,f=m&&wait.get(m.id);if(f){wait.delete(m.id);f(m)}});
+  return{call:(cmd,args={})=>new Promise(res=>{const id='m'+(++n);wait.set(id,res);wv.postMessage({...args,id,cmd})})};
+})();
+
+/* ============================================================
+   SETTINGS — one window; each tool adds its own section
+   ============================================================ */
+const Settings=(()=>{
+  const dlg=$('#dlgSet'),nav=$('#setNav'),body=$('#setBody'),msg=$('#setMsg'),secs=[];
+  const secEl=id=>body.querySelector(`.set-sec[data-s="${id}"]`),navEl=id=>nav.querySelector(`[data-s="${id}"]`);
+  function build(){
+    nav.innerHTML=secs.map(s=>`<button data-s="${s.id}">${ic(s.icon)}${esc(s.title)}<i></i></button>`).join('');
+    body.innerHTML=secs.map(s=>`<section class="set-sec" data-s="${s.id}" hidden></section>`).join('');
+  }
+  function render(id){
+    for(const s of secs){if(id&&s.id!==id)continue;const el=secEl(s.id);delete el.dataset.dirty;navEl(s.id).classList.remove('dirty');s.render(el)}
+  }
+  function show(id){
+    if(!secs.some(s=>s.id===id))id=secs[0].id;
+    LS.set('set.tab',id);
+    for(const s of secs){secEl(s.id).hidden=s.id!==id;navEl(s.id).classList.toggle('on',s.id===id)}
+    $('#setSub').textContent=secs.find(s=>s.id===id).sub||'';body.scrollTop=0;
+  }
+  function open(id){
+    if(!nav.children.length)build();
+    if(!dlg.open){render();msg.textContent='';delete dlg.dataset.dirty}
+    show(id||(App.mod==='stitch'?'stitch':LS.get('set.tab','downloads')));
+    if(!dlg.open){hideTip();dlg.showModal();body.focus({preventScroll:true})}
+  }
+  function dirty(el){
+    const sec=el.closest?.('.set-sec');if(!sec)return;
+    sec.dataset.dirty=dlg.dataset.dirty='1';navEl(sec.dataset.s).classList.add('dirty');
+  }
+  nav.onclick=e=>{const b=e.target.closest('[data-s]');if(b)show(b.dataset.s)};
+  body.addEventListener('input',e=>dirty(e.target));body.addEventListener('change',e=>dirty(e.target));
+  dlg.addEventListener('cancel',e=>{if(dlg.dataset.dirty&&!confirm('Close without saving your changes?'))e.preventDefault()});
+  $('#setSave').onclick=async()=>{
+    const btn=$('#setSave'),notes=[];btn.disabled=true;msg.textContent='Saving…';
+    try{
+      for(const s of secs){const el=secEl(s.id);if(s.save&&el.dataset.dirty){const n=await s.save(el);if(n)notes.push(n);delete el.dataset.dirty}}
+      dlg.close();toast(notes.length?notes[0]:'Settings saved',{kind:'ok',sub:notes.slice(1).join(' ')||null});
+    }catch(e){if(e.section)show(e.section);msg.innerHTML=`<span style="color:var(--cut)">${esc(e.message)}</span>`}
+    finally{btn.disabled=false}
+  };
+  $('#bSettings').onclick=()=>open();
+  return{
+    /** {id, title, icon, order, sub, render(el), save(el) → optional note} */
+    add(s){secs.push(s);secs.sort((a,b)=>a.order-b.order);if(nav.children.length)build()},
+    open,show,dirty,
+    /** Redraw a section with fresh data, unless someone is part-way through editing it. */
+    refresh(id){if(dlg.open&&secEl(id)&&!secEl(id).dataset.dirty)render(id)},
+    get isOpen(){return dlg.open},
+  };
+})();
+Settings.add({id:'general',order:30,title:'General',icon:'sliders',sub:'How RipStitch starts and behaves.',
+  render(el){
+    const st=LS.get('start','last');
+    el.innerHTML=`
+      <div class="set-row"><div><b>Open on</b><span>The tool you see when RipStitch starts. Shared links always open in Rip.</span></div>
+        <select class="inp" data-g="start">${[['last','Where I left off'],['rip','Rip'],['stitch','Stitch']].map(([v,l])=>`<option value="${v}"${v===st?' selected':''}>${l}</option>`).join('')}</select></div>
+      <label class="set-row"><div><b>Button tips</b><span>Show what a button does, and its shortcut, when you rest the pointer on it.</span></div><input type="checkbox" class="sw" data-g="tips"${TIPS?' checked':''}></label>
+      <div class="set-links"><button class="btn" data-ga="keys">${ic('keys')}Keyboard shortcuts</button><button class="btn" data-ga="about">${ic('info')}About RipStitch</button></div>`;
+    el.onclick=e=>{const b=e.target.closest('[data-ga]');if(!b)return;$('#dlgSet').close();(b.dataset.ga==='keys'?openKeys:openAbout)()};
+  },
+  save(el){LS.set('start',el.querySelector('[data-g=start]').value);TIPS=el.querySelector('[data-g=tips]').checked;LS.set('tips',TIPS)}
+});
+App.cmd({id:'hp.settings',group:'Help',title:'Settings…',icon:'gear',keys:['Ctrl+,'],words:'preferences options setup',run:()=>Settings.open()});
+
+/* ============================================================
    GLOBAL INPUT — keys, paste, drag & drop
    ============================================================ */
 addEventListener('keydown',e=>{
   const k=e.key,ctrl=e.ctrlKey||e.metaKey;
   if(ctrl&&!e.altKey&&!e.shiftKey&&k.toLowerCase()==='k'){e.preventDefault();Palette.open();return}
+  if(ctrl&&!e.altKey&&k===','){e.preventDefault();if(!$('dialog[open]'))Settings.open();return}
   if(e.altKey&&!ctrl&&(e.code==='Digit1'||e.code==='Digit2')){e.preventDefault();App.go(e.code==='Digit1'?'rip':'stitch');return}
   if($('dialog[open]'))return;
   const typing=e.target.closest?.('input,select,textarea,[contenteditable]');

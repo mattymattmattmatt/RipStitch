@@ -225,6 +225,9 @@ table.rp-t{width:100%;border-collapse:collapse;font:12px var(--mono)}
 .job .log{margin-top:9px;border-top:1px solid var(--line2);padding-top:8px;font:10.5px/1.5 var(--mono);max-height:220px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:var(--dim);user-select:text}
 .job .log .error{color:#ffb3ae}.job .log .warn{color:#ffc7a3}
 .rp-side-f{border-top:1px solid var(--line);padding:12px 14px;background:var(--panel2);display:flex;flex-direction:column;gap:8px}
+.rp-folder-row{display:flex;align-items:center;gap:6px;min-width:0}
+.rp-folder-row .rp-folder{flex:1;margin-right:0}
+.rp-folder-row .btn{width:auto!important;height:24px!important;flex:0 0 auto}
 .rp-folder{display:flex;align-items:center;gap:8px;font:11px var(--mono);color:var(--dim);min-width:0;text-align:left;border-radius:5px;padding:4px 6px;margin:-4px -6px}
 .rp-folder:hover{color:var(--text);background:var(--panel3)}
 .rp-folder span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left;flex:1;min-width:0}

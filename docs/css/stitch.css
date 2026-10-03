@@ -75,6 +75,11 @@
 .lenrow{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dim)}
 .lenrow b{font:600 12.5px var(--mono);color:var(--text)}
 .lenrow .btn{margin-left:auto}
+.volrow{display:flex;align-items:center;gap:10px}
+.volrow input[type=range]{flex:1;accent-color:var(--hv);height:18px;cursor:pointer;margin:0}
+.volrow b{font:600 12px var(--mono);color:var(--text);min-width:44px;text-align:right}
+.volrow .btn{flex:0 0 auto}
+.fadebtn.on{color:var(--hv);border-color:rgba(255,210,30,.5);background:var(--hvdim)}
 .posrow{display:flex;align-items:center;gap:6px}
 .posrow span{margin-left:auto;font:600 11.5px var(--mono);color:var(--dim)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -102,6 +107,8 @@
 .split:hover::after,.split.drag::after{background:var(--hv)}
 .dock{display:flex;flex-direction:column;background:var(--panel);min-height:0;min-width:0}
 .dockbar{height:38px;display:flex;align-items:center;gap:6px;padding:0 12px;flex:0 0 auto;border-bottom:1px solid var(--line)}
+.tools{display:flex;align-items:center;gap:4px}
+.tools .btn.on{color:var(--hv);border-color:rgba(255,210,30,.5);background:var(--hvdim)}
 .zread{font:600 11px var(--mono);color:var(--dim);min-width:46px;text-align:center}
 .dock-hint{font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tl{position:relative;flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
@@ -111,6 +118,11 @@
 .track{position:relative;height:100%;touch-action:none}
 .tl-empty{position:absolute;left:14px;right:14px;top:10px;bottom:10px;border:1.5px dashed var(--line2);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:12px;pointer-events:none;text-align:center;padding:0 16px}
 .ph{position:absolute;top:0;bottom:0;left:0;width:2px;margin-left:-1px;background:#fff;z-index:20;pointer-events:none;box-shadow:0 0 0 1px rgba(0,0,0,.35);will-change:transform}
+.bladeln{position:absolute;top:4px;bottom:4px;left:0;width:2px;margin-left:-1px;background:var(--hv);z-index:22;pointer-events:none;box-shadow:0 0 0 1px rgba(0,0,0,.5),0 0 10px rgba(255,210,30,.6)}
+.bladeln::before{content:"";position:absolute;top:-4px;left:-5px;border:6px solid transparent;border-top:7px solid var(--hv)}
+body.blade .track,body.blade .track .clip{cursor:crosshair}
+body.blade .clip .h,body.blade .clip .x{display:none!important}
+body.blade .tls{box-shadow:inset 0 0 0 1px rgba(255,210,30,.35)}
 .ins{position:absolute;top:4px;bottom:4px;width:3px;margin-left:-1.5px;background:var(--hv);border-radius:2px;z-index:25;pointer-events:none;box-shadow:0 0 12px var(--hv)}
 .ins::before,.ins::after{content:"";position:absolute;left:-4px;border:5.5px solid transparent}
 .ins::before{top:-3px;border-top-color:var(--hv)}.ins::after{bottom:-3px;border-bottom-color:var(--hv)}
@@ -132,6 +144,11 @@
 .badge.w{color:var(--warn)}.badge.b{color:var(--cut)}.badge.r{color:var(--rip)}
 .clip .au-ic{position:absolute;left:6px;bottom:2px;width:12px;height:12px;color:var(--dim);display:none}
 .clip.muted .au-ic,.clip.noaudio .au-ic{display:block}
+.clip .lab,.clip .dur,.clip .badges{z-index:6}
+.clip .fdi,.clip .fdo{position:absolute;top:0;bottom:17px;z-index:5;pointer-events:none;max-width:100%}
+.clip .fdi{left:0;background:linear-gradient(to bottom right,rgba(4,6,9,.62) calc(50% - 1px),var(--hv) 50%,transparent calc(50% + 1.2px))}
+.clip .fdo{right:0;background:linear-gradient(to bottom left,rgba(4,6,9,.62) calc(50% - 1px),var(--hv) 50%,transparent calc(50% + 1.2px))}
+.tls.grid .clip .fdi,.tls.grid .clip .fdo{display:none}
 .clip .ring{position:absolute;inset:0;border-radius:5px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);pointer-events:none;z-index:6}
 .clip:hover .ring{box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
 .clip.sel .ring{box-shadow:inset 0 0 0 2px var(--hv),0 0 0 1px rgba(255,210,30,.2)}
@@ -198,6 +215,7 @@ body.trimming,body.trimming *{cursor:ew-resize!important}
 
 body.busy .lockable{pointer-events:none;opacity:.42}
 body.busy .clip{cursor:default}
-@media (max-width:900px){.dock-hint{display:none}}
+@media (max-width:1100px){.dock-hint{display:none}}
 @media (max-width:700px){.work{grid-template-columns:1fr}.side{display:none}.transport .tp-info{display:none}}
 @media (max-width:620px){.transport{flex-wrap:wrap;row-gap:6px;padding-bottom:10px}.transport .grow{display:none}.tc b{font-size:14px}}
+.bladeln.no{background:var(--cut);box-shadow:0 0 0 1px rgba(0,0,0,.5)}.bladeln.no::before{border-top-color:var(--cut)}

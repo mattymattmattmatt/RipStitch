@@ -12,7 +12,7 @@
     <RootNamespace>RipStitch</RootNamespace>
     <ApplicationIcon>..\installer\ripstitch.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <Product>RipStitch</Product>
     <Company>Matty P from I.T.</Company>
     <Description>RipStitch: rip videos, stitch them together</Description>
@@ -29,6 +29,7 @@
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.IO.Compression" />
+    <Reference Include="System.Web.Extensions" />
   </ItemGroup>
   <ItemGroup Condition="Exists('payload.zip')">
     <EmbeddedResource Include="payload.zip" LogicalName="payload.zip" />

@@ -148,6 +148,39 @@ dialog[open]{animation:dlgIn .16s ease-out}
 .krow span:last-child{display:flex;gap:3px;flex:0 0 auto}
 .sig{margin-left:auto;font:600 10px var(--mono);color:var(--faint);letter-spacing:.06em}
 
+/* settings */
+#dlgSet{max-width:min(880px,94vw)}
+.set-wrap{display:grid;grid-template-columns:190px minmax(0,1fr);height:min(560px,68vh)}
+.set-nav{display:flex;flex-direction:column;gap:2px;padding:12px 10px;border-right:1px solid var(--line);background:var(--panel2);overflow:auto}
+.set-nav button{display:flex;align-items:center;gap:10px;height:34px;padding:0 11px;border-radius:5px;font-size:12.5px;font-weight:600;color:var(--dim);text-align:left;white-space:nowrap;flex:0 0 auto}
+.set-nav button:hover{color:var(--text);background:var(--panel3)}
+.set-nav button.on{color:var(--text);background:var(--panel3);box-shadow:inset 2px 0 0 var(--acc)}
+.set-nav button.on .ic{color:var(--acc)}
+.set-nav button i{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--acc);display:none}
+.set-nav button.dirty i{display:block}
+.set-body{padding:18px 22px 22px;overflow:auto;min-width:0;outline:none}
+.set-sec>.sub:first-child{margin-top:0}
+.set-sec .fld+.fld{margin-top:0}
+.set-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.set-row:last-child{border-bottom:0}
+.set-row>div>b{display:block;font-size:12.5px;font-weight:600;color:var(--text)}
+.set-row>div>span{display:block;font-size:11.5px;color:var(--dim);margin-top:2px;line-height:1.45}
+.set-row select.inp{width:auto;min-width:170px}
+.folder{display:flex;gap:6px;align-items:center}
+.folder .inp{flex:1}
+.folder .inp.picked{border-color:var(--acc);box-shadow:0 0 0 3px var(--accdim)}
+.set-links{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+
+/* right-click menu */
+.menu.ctx{position:fixed;top:0;left:0;z-index:95;min-width:230px;animation:dlgIn .1s ease-out}
+.menu button:disabled{opacity:.38;cursor:default;background:none}
+.menu button .ic{width:15px;height:15px;color:var(--dim)}
+.menu button:hover:not(:disabled) .ic{color:var(--acc)}
+.menu button.on .ic{color:var(--acc)}
+.menu button.danger:hover:not(:disabled){color:#ffb4ad;background:rgba(255,90,77,.1)}
+.menu button.danger:hover .ic{color:var(--cut)}
+.menu .mh{padding:4px 10px 6px;font:600 10.5px var(--mono);color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+
 /* command palette */
 #dlgCmd{max-width:min(620px,94vw);margin-top:12vh;overflow:hidden}
 .cmd-in{display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid var(--line)}
@@ -193,5 +226,6 @@ body.dropping::after{content:attr(data-drop);position:fixed;inset:8px;z-index:99
 /* ---------- responsive shell ---------- */
 @media (max-width:1240px){.tally{display:none}.cmdk span,.cmdk kbd{display:none}.cmdk{padding:0;width:30px}}
 @media (max-width:900px){:root{--side-w:280px}.wm{display:none}.tab .tl{display:none}.tab{padding:0 10px}.hide-md{display:none!important}}
+@media (max-width:720px){.set-wrap{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}.set-nav{flex-direction:row;border-right:0;border-bottom:1px solid var(--line);padding:8px}.set-nav button.on{box-shadow:inset 0 -2px 0 var(--acc)}.set-row{grid-template-columns:1fr}}
 @media (max-width:620px){.top{gap:4px;padding:0 8px}.tabs{padding:2px}.hide-sm{display:none!important}.g3{grid-template-columns:1fr 1fr}.keys{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}

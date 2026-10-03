@@ -81,6 +81,12 @@
   <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M3 12h11M10 7l5 5-5 5"/><circle cx="18.5" cy="6.5" r="2"/><circle cx="18.5" cy="17.5" r="2"/><path d="M17 8l-1.5 3M17 16l-1.5-3"/></symbol>
   <symbol id="i-scissor" viewBox="0 0 24 24"><path d="M4 7h4M4 17h4M10 4v16M14 4v16M16 7h4M16 17h4"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-split" viewBox="0 0 24 24"><path d="M12 3v18" stroke-dasharray="2.2 2.4"/><path d="M8.5 8 5 12l3.5 4M15.5 8 19 12l-3.5 4"/></symbol>
+  <symbol id="i-blade" viewBox="0 0 24 24"><path d="M3.5 20.5 9 15"/><path d="M8 16 18.2 5.8a2.3 2.3 0 0 1 3.3 3.3L11.3 19.3z"/><path d="M14 10l2 2"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8.5h3L9 5.5h6l2 3h3v10.5H4z"/><circle cx="12" cy="13.5" r="3.5"/></symbol>
+  <symbol id="i-fadein" viewBox="0 0 24 24"><path d="M3 19 12 6h9"/><path d="M3 19h18" opacity=".45"/></symbol>
+  <symbol id="i-fadeout" viewBox="0 0 24 24"><path d="M3 6h9l9 13"/><path d="M3 19h18" opacity=".45"/></symbol>
   <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-4 1.3-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></symbol>
 </svg>
 
@@ -95,12 +101,11 @@
 
   <!-- Rip toolbar -->
   <div class="tb" data-for="rip" id="tbRip">
-    <button class="eng" id="engPill" data-tip="Engine status · click for setup"><span class="dot" id="engDot"></span><span id="engTxt">Engine</span></button>
+    <button class="eng" id="engPill" data-tip="Engine status · click for details"><span class="dot" id="engDot"></span><span id="engTxt">Engine</span></button>
     <span class="tchip hide-md" id="tcFF" hidden></span>
     <span class="tchip hide-md" id="tcFree" hidden></span>
     <div class="grow"></div>
     <a class="btn sm web-only hide-sm" id="bGetApp" hidden href="https://github.com/mattymattmattmatt/RipStitch/releases/download/desktop-latest/RipStitch.exe" data-tip="RipStitch as a normal Windows program: its own window, no browser, nothing to install"><svg class="ic"><use href="#i-install"/></svg><span class="hide-md">Windows app</span></a>
-    <button class="btn flat sm hide-sm" id="bRipSetup" data-tip="Download settings &amp; engine"><svg class="ic"><use href="#i-sliders"/></svg><span class="hide-md">Setup</span></button>
   </div>
 
   <!-- Stitch toolbar -->
@@ -143,7 +148,8 @@
 
   <div class="vsep hide-sm"></div>
   <button class="btn flat cmdk" id="bCmd" data-tip="Search every command"><svg class="ic"><use href="#i-search"/></svg><span>Commands</span><kbd>Ctrl K</kbd></button>
-  <button class="btn flat io" id="bKeys" data-tip="Keyboard shortcuts" data-key="?"><svg class="ic"><use href="#i-keys"/></svg></button>
+  <button class="btn flat io hide-sm" id="bKeys" data-tip="Keyboard shortcuts" data-key="?"><svg class="ic"><use href="#i-keys"/></svg></button>
+  <button class="btn flat io" id="bSettings" data-tip="Settings: download folder, editor and more" data-key="Ctrl+,"><svg class="ic"><use href="#i-gear"/></svg></button>
 </header>
 
 <main class="views">
@@ -188,7 +194,7 @@
     </div>
     <div class="rp-jobs" id="rJobs"></div>
     <div class="rp-side-f">
-      <button class="rp-folder" id="rFolder" data-tip="Open the download folder"><svg class="ic"><use href="#i-open"/></svg><span id="rFolderTxt">Downloads/RipStitch</span></button>
+      <div class="rp-folder-row"><button class="rp-folder" id="rFolder" data-tip="Open the download folder"><svg class="ic"><use href="#i-open"/></svg><span id="rFolderTxt">Downloads/RipStitch</span></button><button class="btn flat sm" id="rFolderSet" data-tip="Choose where downloads are saved">Change</button></div>
       <button class="btn hv" id="rToStitch" disabled hidden><svg class="ic"><use href="#i-cut"/></svg><span id="rToStitchTxt">Send finished to Stitch</span></button>
     </div>
   </aside>
@@ -216,7 +222,7 @@
             <button class="btn" id="bOpen2"><svg class="ic"><use href="#i-open"/></svg>Open project</button>
           </div>
           <div class="restore" id="restore" hidden></div>
-          <div class="hints"><span><kbd>Space</kbd> play</span><span><kbd>I</kbd> <kbd>O</kbd> mark in / out</span><span><kbd>S</kbd> preview whole cut</span><span><kbd>?</kbd> all shortcuts</span></div>
+          <div class="hints"><span><kbd>Space</kbd> play</span><span><kbd>I</kbd> <kbd>O</kbd> mark in / out</span><span><kbd>B</kbd> split at the playhead</span><span><kbd>S</kbd> preview whole cut</span><span><kbd>?</kbd> all shortcuts</span></div>
         </div>
       </div>
       <div class="scrub lockable" id="scrub">
@@ -242,6 +248,7 @@
         <div class="tp-info" id="tpInfo"></div>
         <button class="btn sm" id="tIn" data-tip="Mark in at playhead" data-key="I"><svg class="ic"><use href="#i-in"/></svg>In</button>
         <button class="btn sm" id="tOut" data-tip="Mark out at playhead" data-key="O">Out<svg class="ic"><use href="#i-out"/></svg></button>
+        <button class="btn flat io hide-sm" id="tShot" data-tip="Save this frame as an image" data-key="P"><svg class="ic"><use href="#i-camera"/></svg></button>
         <button class="btn flat io" id="tVol" data-tip="Preview sound on / off" data-key="Shift+M"><svg class="ic"><use href="#i-vol"/></svg></button>
       </div>
     </section>
@@ -323,8 +330,15 @@
       <span class="zread" id="zRead">FIT</span>
       <button class="btn flat io" id="zIn" data-tip="Zoom in" data-key="+"><svg class="ic"><use href="#i-zin"/></svg></button>
       <button class="btn flat io" id="zFit" data-tip="Fit whole cut" data-key="0"><svg class="ic"><use href="#i-fit"/></svg></button>
+      <div class="vsep"></div>
+      <div class="tools lockable">
+        <button class="btn sm" id="bSplit" data-tip="Split the clip at the playhead" data-key="B"><svg class="ic"><use href="#i-split"/></svg><span class="hide-sm">Split</span></button>
+        <button class="btn sm" id="bBlade" data-tip="Blade tool: click anywhere on a clip to cut it there" data-key="Shift+B" aria-pressed="false"><svg class="ic"><use href="#i-blade"/></svg><span class="hide-sm">Blade</span></button>
+        <button class="btn sm io hide-sm" id="bFadeIn" data-tip="Fade the selected clip in from black"><svg class="ic"><use href="#i-fadein"/></svg></button>
+        <button class="btn sm io hide-sm" id="bFadeOut" data-tip="Fade the selected clip out to black"><svg class="ic"><use href="#i-fadeout"/></svg></button>
+      </div>
       <div class="grow"></div>
-      <span class="dock-hint" id="dockHint">Drag clips to reorder · drag clip edges to trim · click the ruler to scrub · Ctrl+wheel to zoom</span>
+      <span class="dock-hint" id="dockHint"></span>
     </div>
     <div class="tl">
       <canvas id="ruler"></canvas>
@@ -332,6 +346,7 @@
         <div class="tlc" id="tlc">
           <div class="track" id="track"></div>
           <div class="ph" id="ph" hidden></div>
+          <div class="bladeln" id="bladeLn" hidden></div>
           <div class="ins" id="ins" hidden></div>
         </div>
       </div>
@@ -390,14 +405,17 @@
   <div class="cmd-foot"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>Enter</kbd> run</span><span><kbd>Esc</kbd> close</span></div>
 </dialog>
 
-<dialog id="dlgSet" class="mid">
-  <div class="dh"><div><h3>Rip setup</h3><p>Saved in the engine on this computer, so they apply to every download.</p></div><button class="btn flat io" data-close><svg class="ic"><use href="#i-x"/></svg></button></div>
-  <div class="db" id="setBody"></div>
+<dialog id="dlgSet" aria-label="Settings">
+  <div class="dh"><div><h3>Settings</h3><p id="setSub"></p></div><button class="btn flat io" data-close data-tip="Close" data-key="Esc"><svg class="ic"><use href="#i-x"/></svg></button></div>
+  <div class="set-wrap">
+    <nav class="set-nav" id="setNav" aria-label="Settings sections"></nav>
+    <div class="set-body" id="setBody" tabindex="-1"></div>
+  </div>
   <div class="df">
     <span class="note" id="setMsg"></span>
     <div class="grow"></div>
     <button class="btn" data-close>Cancel</button>
-    <button class="btn rip" id="setSave"><svg class="ic"><use href="#i-check"/></svg>Save setup</button>
+    <button class="btn acc" id="setSave"><svg class="ic"><use href="#i-check"/></svg>Save</button>
   </div>
 </dialog>
 
@@ -423,6 +441,7 @@
   <div class="df"><a class="btn flat" href="https://github.com/mattymattmattmatt/RipStitch" target="_blank" rel="noopener"><svg class="ic"><use href="#i-github"/></svg>Source</a><button class="btn flat web-only" id="bInstall" hidden><svg class="ic"><use href="#i-install"/></svg>Install as an app</button><div class="grow"></div><button class="btn" data-close>Close</button></div>
 </dialog>
 
+<div class="menu ctx" id="ctxMenu" role="menu" hidden></div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div class="tip" id="tip" hidden></div>
 <div class="dtip" id="dtip" hidden></div>

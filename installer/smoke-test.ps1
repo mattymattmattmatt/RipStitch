@@ -30,6 +30,7 @@ if (-not (Test-Path $startup)) { Fail 'no Startup shortcut' }
 Write-Host '== start the way Windows does at sign-in'
 $sh = (New-Object -ComObject WScript.Shell).CreateShortcut($startup)
 Write-Host "  $($sh.TargetPath) $($sh.Arguments)"
+$env:RIPSTITCH_PICKER_AUTO_MS = '1500'   # the folder picker presses "Select Folder" by itself in this test
 Start-Process $sh.TargetPath -ArgumentList $sh.Arguments -WorkingDirectory $sh.WorkingDirectory
 $h = $null
 for ($i = 0; $i -lt 90 -and -not $h; $i++) { try { $h = Invoke-RestMethod "$api/api/health" -TimeoutSec 3 } catch { Start-Sleep 1 } }
@@ -87,6 +88,16 @@ foreach ($j in $jobs) {
 $best = $jobs | Where-Object { $_.label -eq 'best' }
 Invoke-WebRequest "$api/api/file?t=$($h.token)&job=$($best.id)" -OutFile "$work\back.mp4" -TimeoutSec 60
 if ((Get-Item "$work\back.mp4").Length -ne $best.size) { Fail 'file endpoint returned the wrong size' }
+
+Write-Host '== folder picker (Settings > Downloads > Browse)'
+$pickDir = New-Item -ItemType Directory -Force (Join-Path $work 'pick me')
+foreach ($round in 'first (compiles the picker)', 'second (cached)') {
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  $pk = Post '/api/pick-folder' @{ start = $pickDir.FullName; title = 'RipStitch smoke test' }
+  Write-Host ("  {0}: {1:N1} s -> {2}" -f $round, $sw.Elapsed.TotalSeconds, $pk.path)
+  if (-not $pk.path) { Fail 'the folder picker came back empty (cancelled)' }
+  if ((Split-Path $pk.path -Leaf) -ne 'pick me' -or -not (Test-Path -LiteralPath $pk.path)) { Fail "the folder picker returned '$($pk.path)'" }
+}
 
 Write-Host '== real-world YouTube check (informational)'
 try {
