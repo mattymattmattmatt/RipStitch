@@ -6,7 +6,7 @@
 const Rip=(()=>{
 const DEFAULT_BASE='http://127.0.0.1:8731';
 const HOSTED_ENGINE='https://mattymattmattmatt.github.io/RipStitch/engine/ripstitch_engine.py';
-const ENGINE_LATEST='1.3.0';   // keep in step with VERSION in docs/engine/ripstitch_engine.py
+const ENGINE_LATEST='1.3.1';   // keep in step with VERSION in docs/engine/ripstitch_engine.py
 const WIN_SETUP='https://github.com/mattymattmattmatt/RipStitch/releases/download/engine-latest/RipStitch-Setup.exe';
 const WIN_SIZE='95 MB';
 const DESKTOP_EXE='https://github.com/mattymattmattmatt/RipStitch/releases/download/desktop-latest/RipStitch.exe';

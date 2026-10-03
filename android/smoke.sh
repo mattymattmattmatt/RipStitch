@@ -38,6 +38,7 @@ echo "$res"
 adb logcat -d -v time RipStitch:V RipStitch-web:V RipStitch-smoke:V AndroidRuntime:E '*:S' > $OUT/logcat.txt 2>&1
 adb pull $EXT/engine.log $OUT/ >/dev/null 2>&1
 adb pull $EXT/engine-console.log $OUT/ >/dev/null 2>&1
+echo "--- page errors"; grep -E " E/RipStitch-web" $OUT/logcat.txt | tail -20 || true
 if ! printf '%s\n' "$res" | grep -q '^result: ok'; then
   echo "::error::Android self-test failed"
   echo "--- logcat"; tail -80 $OUT/logcat.txt

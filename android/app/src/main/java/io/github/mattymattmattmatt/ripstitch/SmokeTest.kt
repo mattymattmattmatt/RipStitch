@@ -147,7 +147,9 @@ class SmokeTest(private val act: MainActivity, private val cfg: File) {
             log("export: ${exported.name} ${exported.length()} bytes")
             phase("exported")
 
-            js("Settings.open('downloads')")
+            val opened = js("(()=>{try{Settings.open('downloads');return document.getElementById('dlgSet').open?'open':'closed'}catch(e){return 'ERR '+e+' '+(e.stack||'')}})()")
+            log("settings: $opened")
+            check(opened == "open") { "Settings didn't open: $opened" }
             phase("settings")
             js("document.getElementById('dlgSet').close();App.go('rip')")
 

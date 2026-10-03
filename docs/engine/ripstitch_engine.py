@@ -40,7 +40,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 DEFAULT_PORT = 8731
 APP_URL = os.environ.get("RIPSTITCH_APP_URL") or "https://mattymattmattmatt.github.io/RipStitch/"
 TRUSTED_ORIGINS = {"https://mattymattmattmatt.github.io"}
@@ -415,6 +415,8 @@ def worker_main() -> int:
         emit(t="error", msg=f"engine worker could not start: {e}")
         return 2
 
+    errors: list = []
+
     class Log:
         def debug(self, msg):
             if not msg.startswith("[debug] "):
@@ -427,6 +429,7 @@ def worker_main() -> int:
             emit(t="log", level="warn", msg=clean(msg))
 
         def error(self, msg):
+            errors.append(clean(msg))
             emit(t="log", level="error", msg=clean(msg))
 
     try:
@@ -439,7 +442,11 @@ def worker_main() -> int:
     if spec["action"] == "probe":
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.sanitize_info(ydl.extract_info(spec["url"], download=False))
+                raw = ydl.extract_info(spec["url"], download=False)
+                if raw is None:   # yt-dlp logged the reason and moved on (its default for the command line)
+                    emit(t="error", msg=errors[-1] if errors else "yt-dlp couldn't read that link")
+                    return 1
+                info = ydl.sanitize_info(raw)
             emit(t="result", data=summarize(info))
             return 0
         except Exception as e:
@@ -957,10 +964,13 @@ def friendly_error(msg: str) -> str:
     m = msg or ""
     if "ffmpeg" in m.lower() and ("not installed" in m.lower() or "not found" in m.lower()):
         return m + "\nInstall FFmpeg (Windows: winget install Gyan.FFmpeg · macOS: brew install ffmpeg · Linux: sudo apt install ffmpeg) and restart the engine."
+    if "not a bot" in m:
+        return m + ("\nYouTube sometimes asks this of new connections. Wait a few minutes and try again, or switch between Wi-Fi and mobile data."
+                    if ANDROID else "\nTip: in Settings → Downloads, choose the browser you're signed in with under “Sign in using browser cookies”.")
     if "Sign in to confirm" in m or "login" in m.lower() and "required" in m.lower():
-        return m + "\nTip: in Setup, choose the browser you're signed in with under “Sign in using browser cookies”."
+        return m + ("" if ANDROID else "\nTip: in Settings → Downloads, choose the browser you're signed in with under “Sign in using browser cookies”.")
     if "HTTP Error 403" in m:
-        return m + "\nTip: update yt-dlp in Setup — sites change often and new releases fix most 403s."
+        return m + "\nTip: update yt-dlp in Settings → Engine. Sites change often and new releases fix most 403s."
     return m
 
 
@@ -1091,7 +1101,7 @@ PROBE_CACHE: dict = {}
 
 def probe(url: str, playlist: bool) -> dict:
     if not RUNTIME["py"]:
-        raise RuntimeError("yt-dlp is not installed yet. Open Setup and press Install yt-dlp.")
+        raise RuntimeError("yt-dlp is not installed yet. Open Settings → Engine and press Install.")
     with CFG_LOCK:
         cfg = dict(CFG)
     key = (url, playlist, cfg.get("cookies_from"))

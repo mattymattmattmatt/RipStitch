@@ -414,6 +414,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private inner class Chrome : WebChromeClient() {
+        // Without this, WebView paints a grey "play" placeholder over videos that haven't played yet.
+        override fun getDefaultVideoPoster(): android.graphics.Bitmap =
+            android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888)
+
         override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
             fileCallback?.onReceiveValue(null)
             fileCallback = callback
