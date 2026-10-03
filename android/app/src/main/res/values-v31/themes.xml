@@ -1,0 +1,11 @@
+<resources>
+    <style name="Theme.RipStitch" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/panel</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:colorAccent">@color/rip</item>
+        <item name="android:colorPrimary">@color/panel</item>
+        <item name="android:colorPrimaryDark">@color/panel</item>
+        <item name="android:windowSplashScreenBackground">@color/bg</item>
+    </style>
+</resources>

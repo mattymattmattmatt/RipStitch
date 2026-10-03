@@ -10,6 +10,10 @@ const ENGINE_LATEST='1.3.0';   // keep in step with VERSION in docs/engine/ripst
 const WIN_SETUP='https://github.com/mattymattmattmatt/RipStitch/releases/download/engine-latest/RipStitch-Setup.exe';
 const WIN_SIZE='95 MB';
 const DESKTOP_EXE='https://github.com/mattymattmattmatt/RipStitch/releases/download/desktop-latest/RipStitch.exe';
+const ANDROID_APK='https://github.com/mattymattmattmatt/RipStitch/releases/download/android-latest/RipStitch.apk';
+/** The engine came with one of the RipStitch apps (it updates with the app, and can't be stopped from here). */
+const bundled=h=>['desktop','android'].includes(h?.install);
+const PHONE=/Android/i.test(navigator.userAgent);
 const LOOP=['127.0.0.1','localhost','[::1]'];
 const ACTIVE=['queued','running','merging'];
 const E={base:LS.get('engine.base',null)||DEFAULT_BASE,state:'idle',health:null,token:null,cfg:null,tries:0,timer:0,userAsked:false,wasOnline:false};
@@ -103,13 +107,30 @@ function renderEngine(){
   const box=$('#rEngine'),h=E.health;
   if(E.state==='online'){
     const notes=[];
-    if(vcmp(h.version,ENGINE_LATEST)<0&&h.install!=='desktop')notes.push(`<div class="callout info">${ic('spark')}<div><b>Engine update available</b> (${esc(h.version)} → ${ENGINE_LATEST}). It takes a few seconds and keeps your settings and downloads.<br><button class="btn sm rip" data-act="selfupdate">${ic('reset')}Update the engine</button></div></div>`);
+    if(vcmp(h.version,ENGINE_LATEST)<0&&!bundled(h))notes.push(`<div class="callout info">${ic('spark')}<div><b>Engine update available</b> (${esc(h.version)} → ${ENGINE_LATEST}). It takes a few seconds and keeps your settings and downloads.<br><button class="btn sm rip" data-act="selfupdate">${ic('reset')}Update the engine</button></div></div>`);
     if(!h.ytdlp)notes.push(`<div class="callout bad">${ic('warn')}<div><b>yt-dlp isn’t installed in the engine yet.</b> It does the actual downloading.<br><button class="btn sm rip" data-act="install">${ic('dl')}Install yt-dlp now</button></div></div>`);
     if(!h.ffmpeg)notes.push(`<div class="callout">${ic('warn')}<div><b>FFmpeg is missing.</b> Without it, sites that split video and audio (YouTube above 720p) only offer lower qualities, and audio conversion, section clips and embedding are off. ${h.platform==='windows'?'Reinstalling with the <a href="'+WIN_SETUP+'">Windows installer</a> includes it.':'Run the install command from the Rip tab again, or install FFmpeg and restart the engine.'}</div></div>`);
     box.innerHTML=notes.join('');box.style.marginTop=notes.length?'18px':'';
     return;
   }
   box.style.marginTop='';
+  if(APP){
+    box.innerHTML=`<div class="rp-card" id="rCard"><div class="rp-card-h"><div class="badge-ic">${ic('plug')}</div><div><h3>${E.state==='checking'?'Starting the engine…':'The engine stopped'}</h3>
+      <p>RipStitch’s engine runs inside the app. ${E.state==='checking'?'One moment.':'Restart it and your downloads pick up where they left off.'}</p></div></div>
+      <div class="rp-status"><span class="dot ${E.state==='checking'?'wait':'bad'}"></span><span>${E.state==='checking'?'Connecting…':'Not running'}</span><button class="btn sm rip" data-act="restart">${ic('reset')}Restart the engine</button></div></div>`;
+    return;
+  }
+  if(PHONE){
+    box.innerHTML=`<div class="rp-card" id="rCard">
+      <div class="rp-card-h"><div class="badge-ic">${ic('dl')}</div><div><h3>Get the RipStitch app to rip on your phone</h3>
+        <p>Phone browsers can’t run yt-dlp, so Rip needs the RipStitch app. It has everything built in and saves straight to your phone’s Download folder. Stitch works right here in the browser.</p></div></div>
+      <div class="rp-get"><a class="btn rip lg rp-dl" href="${ANDROID_APK}" data-act="dlapk">${ic('dl')}<span>Download RipStitch for Android</span></a><span class="note">Free · Android 7 or newer · not on the Play Store</span></div>
+      <div class="rp-steps rp-steps-sm">
+        <div class="rp-step"><div><b>Open the downloaded RipStitch.apk</b><p>Android asks whether your browser may install apps. Allow it, then tap <b>Install</b>. If Play Protect warns about an unknown app, tap <b>More details → Install anyway</b>.</p></div></div>
+        <div class="rp-step"><div><b>Share links straight to it</b><p>In YouTube or any app, tap <b>Share → RipStitch</b> and pick a quality.</p></div></div>
+      </div></div>`;
+    return;
+  }
   const where=esc(E.base.replace(/^https?:\/\//,''));
   const st={
     idle:['','Not connected yet. Installed already? Press Connect.',`<button class="btn sm rip" data-act="connect">${ic('plug')}Connect</button>`],
@@ -160,6 +181,8 @@ $('#rEngine').addEventListener('click',e=>{
   const o=e.target.closest('[data-os]');if(o){OS=o.dataset.os;LS.set('rip.os',OS);renderEngine();return}
   const a=e.target.closest('[data-act]');if(!a)return;
   if(a.dataset.act==='connect')connect(true);
+  else if(a.dataset.act==='restart'){Host?.tell('restartEngine');setState('checking');setTimeout(()=>connect(true),1500)}
+  else if(a.dataset.act==='dlapk')toast('Downloading RipStitch.apk',{kind:'ok',sub:'Open it when it finishes. Allow installs from your browser if Android asks.',ms:9000});
   else if(a.dataset.act==='install')updateYtdlp();
   else if(a.dataset.act==='selfupdate')selfUpdate(a);
   else if(a.dataset.act==='dlwin'){LS.set('engine.downloaded',Date.now());setTimeout(()=>connect(true),1500);toast('Downloading RipStitch-Setup.exe',{kind:'ok',sub:'Run it when it finishes. This page connects by itself once the engine starts.',ms:9000})}
@@ -218,9 +241,9 @@ urlIn.addEventListener('keydown',e=>{if(e.key==='Escape'){urlIn.blur()}});
 $('#rPl').onchange=e=>{R.pl=e.target.checked;suggest()};
 $('#rAuto').checked=R.auto;
 $('#rAuto').onchange=e=>setAuto(e.target.checked);
-if(navigator.clipboard?.readText){$('#rPaste').hidden=false;$('#rPaste').onclick=pasteAndRead}
+if(ANDROID||navigator.clipboard?.readText){$('#rPaste').hidden=false;$('#rPaste').onclick=pasteAndRead}
 async function pasteAndRead(){
-  try{const t=await navigator.clipboard.readText();const u=findUrl(t);if(!u)return toast('No link on the clipboard',{kind:'warn'});App.go('rip');read(u)}
+  try{const t=ANDROID?(await Host.call('paste')).text||'':await navigator.clipboard.readText();const u=findUrl(t);if(!u)return toast('No link on the clipboard',{kind:'warn'});App.go('rip');read(u)}
   catch{toast('The browser blocked clipboard access',{kind:'warn',sub:'Click the link box and press '+MOD+'+V instead.'});urlIn.focus()}
 }
 
@@ -503,7 +526,7 @@ async function enqueue(spec){
     const d=await api('/api/enqueue',body);
     if(R.auto&&spec.quality!=='audio'&&!spec.audio_only_format){d.ids.forEach(id=>R.autoIds.add(id));LS.set('rip.autoIds',[...R.autoIds])}
     toast(items.length>1?`Queued ${plural(items.length,'download')}`:`Queued “${trunc(items[0].title,48)}”`,{kind:'ok',sub:`${body.label||''}${R.auto&&spec.quality!=='audio'?' · goes to Stitch when done':''}`});
-    pollJobs(true);
+    pollJobs(true);if(ANDROID)Host?.tell('downloads');   // the app keeps downloads going with the screen off
     const side=$('.rp-side');side.animate?.([{boxShadow:'inset 3px 0 0 var(--rip)'},{boxShadow:'inset 0 0 0 transparent'}],{duration:900});
   }catch(e){toast('Couldn’t queue that',{kind:'err',sub:e.message});if(e.offline)connect(false)}
 }
@@ -549,7 +572,10 @@ function jobHtml(j){
   const B=(a,icon,label,cls='',tip='')=>`<button class="btn ${cls}" data-a="${a}" data-id="${j.id}"${tip?` data-tip="${esc(tip)}"`:''}>${ic(icon)}${label}</button>`;
   if(ACTIVE.includes(j.status))acts.push(B('cancel','stop','Stop','danger'));
   if(j.status==='done'&&j.file_ok&&j.kind!=='audio')acts.push(B('stitch','cut',R.sent.has(j.id)?'Again to Stitch':'Edit in Stitch','go','Load this file onto the Stitch timeline'));
-  if(j.status==='done'&&j.file_ok)acts.push(B('reveal','open','Show','','Show in your file manager'));
+  if(j.status==='done'&&j.file_ok){
+    if(ANDROID)acts.push(B('open','play','Open','','Play it in another app'),B('share','send','Share','','Send it to another app'));
+    else acts.push(B('reveal','open','Show','','Show in your file manager'));
+  }
   if(j.status==='error'||j.status==='cancelled')acts.push(B('retry','reset','Retry','',j.status==='cancelled'?'Resumes where it stopped':''));
   if(j.log_lines)acts.push(B('log','log',R.openLogs.has(j.id)?'Hide log':'Log','flat'));
   if(!ACTIVE.includes(j.status))acts.push(B('remove','x','','flat io','Remove from the list'));
@@ -633,6 +659,8 @@ $('#rJobs').addEventListener('click',async e=>{
       case'retry':await api('/api/retry',{id});break;
       case'remove':await api('/api/remove',{id});R.openLogs.delete(id);break;
       case'reveal':await api('/api/reveal',{id});break;
+      case'open':return Files.open(j.dest);
+      case'share':return Files.share(j.dest);
       case'stitch':await toStitch([j]);return;
       case'log':R.openLogs.has(id)?R.openLogs.delete(id):R.openLogs.add(id);R.logN.delete(id);renderJobs();return;
     }
@@ -640,7 +668,8 @@ $('#rJobs').addEventListener('click',async e=>{
   }catch(err){toast(err.message,{kind:'err'})}
 });
 $('#rClear').onclick=async()=>{if(E.state!=='online')return;try{await api('/api/clear',{});pollJobs(true)}catch(e){toast(e.message,{kind:'err'})}};
-$('#rFolder').onclick=()=>{if(E.state!=='online')return toast('Connect the engine first',{kind:'warn'});api('/api/reveal',{}).catch(e=>toast(e.message,{kind:'err'}))};
+$('#rFolder').onclick=()=>{if(E.state!=='online')return toast('Connect the engine first',{kind:'warn'});if(ANDROID)return Files.folder(E.cfg?.out_dir);api('/api/reveal',{}).catch(e=>toast(e.message,{kind:'err'}))};
+if(ANDROID)$('#rBell').hidden=true;   // the app posts its own notifications
 $('#rToStitch').onclick=()=>{const s=sendable();if(s.length)toStitch(s)};
 $('#rBell').onclick=async()=>{
   if(!('Notification'in window))return toast('This browser can’t show notifications',{kind:'warn'});
@@ -758,7 +787,7 @@ function renderDownloads(el){
   el.innerHTML=`
     <div class="fld"><label for="sOut">Save downloads to</label>
       <div class="folder"><input class="inp" id="sOut" data-k="out_dir" value="${esc(c.out_dir)}" spellcheck="false" aria-label="Download folder"><button class="btn" data-sa="browse">${ic('open')}Browse…</button><button class="btn flat io" data-sa="reveal" data-tip="Open the current folder">${ic('ext')}</button></div>
-      <span class="hint">New downloads land here. It’s created if it doesn’t exist${h.free_bytes!=null?` · ${fmtBytes(h.free_bytes)} free`:''}.</span></div>
+      <span class="hint">${ANDROID?'Android lets apps save inside Download or Documents. ':''}New downloads land here. It’s created if it doesn’t exist${h.free_bytes!=null?` · ${fmtBytes(h.free_bytes)} free`:''}.</span></div>
     <div class="sub">Files</div>
     <div class="set-grid">
       <div class="fld" style="grid-column:1/-1"><label for="sTpl">File names</label><input class="inp" id="sTpl" data-k="template" value="${esc(c.template)}" spellcheck="false"><span class="hint">yt-dlp template. Default: <span class="mono">%(title).150B [%(id)s].%(ext)s</span>. Use <span class="mono">%(uploader)s/…</span> for a folder per channel.</span></div>
@@ -781,7 +810,7 @@ function renderDownloads(el){
       <div class="fld"><label for="sWorkers">Downloads at once</label><input class="inp" type="number" min="1" max="8" id="sWorkers" data-k="workers" value="${c.workers}"></div>
       <div class="fld"><label for="sFrag">Connections per download</label><input class="inp" type="number" min="1" max="16" id="sFrag" data-k="frag_workers" value="${c.frag_workers}"><span class="hint">Speeds up streaming sites (HLS/DASH).</span></div>
       <div class="fld"><label for="sRate">Speed cap</label><input class="inp" id="sRate" data-k="rate_limit" value="${esc(c.rate_limit)}" placeholder="e.g. 5M (blank = no cap)" spellcheck="false"></div>
-      <div class="fld"><label for="sCookies">Sign in using browser cookies</label><select class="inp" id="sCookies" data-k="cookies_from">${opt(h.choices.cookies_from,c.cookies_from)}</select><span class="hint">For videos your own account can already see.</span></div>
+      <div class="fld no-android"><label for="sCookies">Sign in using browser cookies</label><select class="inp" id="sCookies" data-k="cookies_from">${opt(h.choices.cookies_from,c.cookies_from)}</select><span class="hint">For videos your own account can already see.</span></div>
       <div class="fld" style="grid-column:1/-1"><label for="sSubs">Subtitle languages</label><input class="inp" id="sSubs" data-k="sub_langs" value="${esc(c.sub_langs)}" spellcheck="false"><span class="hint">Comma separated, wildcards allowed: <span class="mono">en.*,es,ja</span></span></div>
     </div>
     <div class="sub">This device</div>${auto}`;
@@ -800,12 +829,13 @@ async function saveDownloads(el){
 }
 function renderEngineSec(el){
   const h=E.health;el.onclick=onSetClick;
-  const app=DESKTOP?`<dt>App</dt><dd>RipStitch Desktop ${esc((navigator.userAgent.match(/RipStitchDesktop\/([\d.]+)/)||[])[1]||'')}</dd><dd></dd>`:'';
+  const appVer=(navigator.userAgent.match(/RipStitch(?:Desktop|Android)\/([\d.]+)/)||[])[1]||'';
+  const app=APP?`<dt>App</dt><dd>RipStitch ${DESKTOP?'Desktop':'for Android'} ${esc(appVer)}</dd><dd>${ANDROID?`<button class="btn sm" data-sa="appupdate">${ic('reset')}Check for updates</button>`:''}</dd>`:'';
   if(E.state!=='online'||!h){el.innerHTML=offlineCallout()+(app?`<dl class="set-info" style="margin-top:12px">${app}</dl>`:'');return}
   el.innerHTML=`
     <dl class="set-info">
       ${app}
-      <dt>Engine</dt><dd>RipStitch Engine ${esc(h.version)} · ${esc({'windows-app':'Windows app','script':'installed by script',desktop:'built into RipStitch Desktop',manual:'Python script'}[h.install]||'Python script')} · Python ${esc(h.python)}</dd><dd>${h.install==='desktop'?'':vcmp(h.version,ENGINE_LATEST)<0?`<button class="btn sm rip" data-sa="selfupdate">${ic('reset')}Update to ${ENGINE_LATEST}</button>`:`<button class="btn sm danger" data-sa="stop" data-tip="Stops it until you next sign in, or until you start it again">${ic('stop')}Stop</button>`}</dd>
+      <dt>Engine</dt><dd>RipStitch Engine ${esc(h.version)} · ${esc({'windows-app':'Windows app','script':'installed by script',desktop:'built into RipStitch Desktop',android:'built into the app',manual:'Python script'}[h.install]||'Python script')} · Python ${esc(h.python)}</dd><dd>${bundled(h)?'':vcmp(h.version,ENGINE_LATEST)<0?`<button class="btn sm rip" data-sa="selfupdate">${ic('reset')}Update to ${ENGINE_LATEST}</button>`:`<button class="btn sm danger" data-sa="stop" data-tip="Stops it until you next sign in, or until you start it again">${ic('stop')}Stop</button>`}</dd>
       <dt>yt-dlp</dt><dd>${h.ytdlp?esc(h.ytdlp)+(h.runtime==='private'?' · private runtime':''):'<span style="color:var(--cut)">not installed</span>'}</dd><dd><button class="btn sm${h.ytdlp?'':' rip'}" data-sa="update">${ic(h.ytdlp?'reset':'dl')}${h.ytdlp?'Update':'Install'}</button></dd>
       <dt>FFmpeg</dt><dd>${h.ffmpeg?esc(h.ffmpeg_version):'<span style="color:var(--cut)">missing</span>: needed for HD merges, audio conversion and section clips'}</dd><dd></dd>
       <dt>JS runtime</dt><dd>${h.js_runtime?esc(h.js_runtime):'<span style="color:var(--warn)">none</span>: install Deno for full YouTube support'}</dd><dd></dd>
@@ -840,8 +870,8 @@ async function onSetClick(e){
   const b=e.target.closest('[data-sa]');if(!b)return;
   const a=b.dataset.sa;
   if(a==='browse')return browseFolder(b);
-  if(a==='connect'){$('#dlgSet').close();App.go('rip');connect(true);setTimeout(()=>$('#rCard')?.scrollIntoView({behavior:'smooth',block:'start'}),60);return}
-  if(a==='reveal')return api('/api/reveal',{}).catch(err=>toast(err.message,{kind:'err'}));
+  if(a==='connect'){$('#dlgSet').close();App.go('rip');if(ANDROID)Host.tell('restartEngine');connect(true);setTimeout(()=>$('#rCard')?.scrollIntoView({behavior:'smooth',block:'start'}),60);return}
+  if(a==='reveal')return ANDROID?Files.folder(E.cfg?.out_dir):api('/api/reveal',{}).catch(err=>toast(err.message,{kind:'err'}));
   if(a==='selfupdate'){$('#dlgSet').close();return selfUpdate()}
   if(a==='stop'){
     if(R.jobs.some(j=>ACTIVE.includes(j.status))&&!confirm('Downloads are still running. Stop the engine anyway?'))return;
@@ -851,6 +881,7 @@ async function onSetClick(e){
     return toast('Engine stopped',{sub:how});
   }
   if(a==='update')updateYtdlp(b);
+  if(a==='appupdate'){b.disabled=true;const r=await Host.call('checkUpdate');b.disabled=false;if(r.error)toast('Couldn’t check for updates',{kind:'err',sub:r.error});else if(r.newer)offerAppUpdate(r);else toast(`RipStitch ${r.current} is the latest`,{kind:'ok'})}
 }
 Settings.add({id:'downloads',order:10,title:'Downloads',icon:'dl',sub:'Where Rip saves files and how it downloads them. Stored by the engine, so they apply to every download.',render:renderDownloads,save:saveDownloads});
 Settings.add({id:'engine',order:40,title:'Engine',icon:'plug',sub:'The helper that runs yt-dlp and FFmpeg on this computer.',render:renderEngineSec});
@@ -864,8 +895,28 @@ async function updateYtdlp(btn){
   finally{if(btn)btn.disabled=false}
 }
 $('#rFolderSet').onclick=()=>openSettings('downloads');
-if(!DESKTOP&&/Windows/.test(navigator.userAgent))$('#bGetApp').hidden=false;
-$('#bGetApp').onclick=()=>toast('Downloading RipStitch.exe (about 150 MB)',{kind:'ok',sub:'If your browser says it “isn’t commonly downloaded”, choose Keep. If Windows says “Windows protected your PC”, click More info → Run anyway.',ms:12000});
+function offerAppUpdate(r){
+  toast(`RipStitch ${r.latest} is available`,{kind:'ok',ms:0,sub:`You have ${r.current}. Download it and install it over this one; your settings and downloads stay.`,
+    action:{label:'Download',fn:()=>Host.tell('openUrl',{url:ANDROID_APK})}});
+}
+if(ANDROID&&Host){
+  Host.on('update',offerAppUpdate);
+  // Share → RipStitch from another app: a link to rip, or videos to edit
+  Host.on('share',m=>{const u=findUrl(m.text||'');if(u){App.go('rip');read(u)}else toast('That share didn’t include a link',{kind:'warn'})});
+  Host.on('shareFiles',async m=>{
+    App.go('stitch');
+    const t=toast(`Opening ${plural(m.files.length,'video')}…`,{ms:0});
+    try{
+      const files=[];
+      for(const f of m.files){const r=await fetch(f.url);if(!r.ok)throw new Error(`${f.name}: ${r.status}`);files.push(new File([await r.blob()],f.name,{type:f.type||'video/mp4',lastModified:f.mtime||Date.now()}))}
+      t();Stitch.addFiles(files);
+    }catch(e){t.done('Couldn’t open the shared video',{kind:'err',sub:e.message})}
+  });
+}
+if(!APP&&PHONE){const g=$('#bGetApp');g.hidden=false;g.href=ANDROID_APK;g.dataset.tip='RipStitch as an Android app: rip straight to your phone';g.querySelector('span').textContent='Android app';g.classList.remove('hide-sm')}
+else if(!APP&&/Windows/.test(navigator.userAgent))$('#bGetApp').hidden=false;
+$('#bGetApp').onclick=()=>PHONE?toast('Downloading RipStitch.apk',{kind:'ok',sub:'Open it when it finishes. Allow installs from your browser if Android asks, and tap Install anyway if Play Protect warns.',ms:12000})
+  :toast('Downloading RipStitch.exe (about 150 MB)',{kind:'ok',sub:'If your browser says it “isn’t commonly downloaded”, choose Keep. If Windows says “Windows protected your PC”, click More info → Run anyway.',ms:12000});
 $('#engPill').onclick=()=>E.state==='online'?openSettings('engine'):(App.go('rip'),connect(true),setTimeout(()=>$('#rCard')?.scrollIntoView({behavior:'smooth',block:'start'}),60));
 
 /* ============================================================
@@ -897,8 +948,8 @@ const inRip=fn=>()=>{App.go('rip');setTimeout(fn,30)};
 ].forEach(c=>App.cmd({group:'Rip',...c}));
 App.cmd({id:'hp.keys',group:'Help',title:'Keyboard shortcuts',icon:'keys',keys:['?'],run:openKeys});
 App.cmd({id:'hp.about',group:'Help',title:'About RipStitch',icon:'info',run:openAbout});
-App.cmd({id:'hp.install',group:'Help',title:'Install RipStitch as an app',icon:'install',when:()=>!!installEvt&&!DESKTOP,run:()=>$('#bInstall').click()});
-App.cmd({id:'hp.engine',group:'Help',title:'Download the engine (ripstitch_engine.py)',icon:'dl',when:()=>!DESKTOP,run:()=>{const a=document.createElement('a');a.href=engineUrl();a.download='ripstitch_engine.py';a.click()}});
+App.cmd({id:'hp.install',group:'Help',title:'Install RipStitch as an app',icon:'install',when:()=>!!installEvt&&!APP,run:()=>$('#bInstall').click()});
+App.cmd({id:'hp.engine',group:'Help',title:'Download the engine (ripstitch_engine.py)',icon:'dl',when:()=>!APP,run:()=>{const a=document.createElement('a');a.href=engineUrl();a.download='ripstitch_engine.py';a.click()}});
 
 /* ============================================================
    LIFECYCLE
@@ -916,6 +967,7 @@ return{
   init,read,openImport,connect,
   onShow(){if(!R.cur&&matchMedia('(pointer:fine)').matches&&!$('dialog[open]'))setTimeout(()=>{if(App.mod==='rip'&&document.activeElement===document.body)urlIn.focus()},50)},
   onHide(){},onKey,
+  onBack(){if(R.cur){closeSpec();urlIn.blur();return true}return false},
   get engine(){return E},
   _debug:{show,R,E,renderJobs},
 };

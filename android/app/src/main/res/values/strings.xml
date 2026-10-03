@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">RipStitch</string>
+    <string name="share_rip">Rip with RipStitch</string>
+    <string name="share_stitch">Edit in Stitch</string>
+</resources>

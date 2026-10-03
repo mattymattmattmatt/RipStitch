@@ -10,8 +10,9 @@ Runs in your browser. Your files stay on your computer.</p>
 |---|---|
 | [**RipStitch.exe**](https://github.com/mattymattmattmatt/RipStitch/releases/download/desktop-latest/RipStitch.exe) (Windows, about 150 MB) | **The desktop app.** One file: double-click it and Rip and Stitch open in their own window. No browser, nothing to install. |
 | [**RipStitch-Setup.exe**](https://github.com/mattymattmattmatt/RipStitch/releases/download/engine-latest/RipStitch-Setup.exe) (Windows, about 95 MB) | The helper that lets the **website's** Rip tab download. Install once; it starts with Windows. |
+| [**RipStitch.apk**](https://github.com/mattymattmattmatt/RipStitch/releases/download/android-latest/RipStitch.apk) (Android 7+) | **The Android app.** Rip and Stitch on your phone with everything built in. Downloads go to *Download/RipStitch*; share links from YouTube with **Share → RipStitch**. Not on the Play Store (Google doesn't allow YouTube downloaders), so Android asks you to allow the install. |
 
-Neither is code-signed. If your browser says the file "isn't commonly downloaded", choose **Keep**. If Windows says *Windows protected your PC*, click **More info → Run anyway**.
+The Windows files aren't code-signed. If your browser says the file "isn't commonly downloaded", choose **Keep**. If Windows says *Windows protected your PC*, click **More info → Run anyway**.
 
 ![Rip: read a link, pick a quality, watch the queue](docs/img/screen-rip.jpg)
 ![Stitch: trim and join clips, then export](docs/img/screen-stitch.jpg)

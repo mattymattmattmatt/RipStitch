@@ -49,6 +49,14 @@ APP_DIR = ENGINE_PATH.parent.parent        # installed layout: <app>/engine, <ap
 IS_WIN = os.name == "nt"
 IS_MAC = sys.platform == "darwin"
 NO_WINDOW = {"creationflags": 0x08000000} if IS_WIN else {}  # CREATE_NO_WINDOW
+# Inside the RipStitch Android app, which runs this engine on its own Python, FFmpeg and QuickJS.
+ANDROID = os.environ.get("RIPSTITCH_PLATFORM") == "android"
+ANDROID_FFMPEG = os.environ.get("RIPSTITCH_FFMPEG") or None        # .../libffmpeg.so (libffprobe.so beside it)
+ANDROID_JS = os.environ.get("RIPSTITCH_JS") or None                # "quickjs:/path/to/libqjs.so"
+BUNDLED_YTDLP_ZIP = os.environ.get("RIPSTITCH_YTDLP_ZIP") or None  # the yt-dlp zipapp that ships with the app
+# The app's own key: when set, every API call must carry it (cookie rs_key or X-RipStitch-Key header),
+# because on a phone any other app can reach 127.0.0.1.
+SECRET = os.environ.get("RIPSTITCH_SECRET") or None
 
 
 # --------------------------------------------------------------------------
@@ -117,7 +125,7 @@ def save_state(st: dict) -> None:
         pass
 
 DEFAULTS = {
-    "out_dir": str(Path.home() / "Downloads" / "RipStitch"),
+    "out_dir": os.environ.get("RIPSTITCH_DEFAULT_OUT") or str(Path.home() / "Downloads" / "RipStitch"),
     "workers": 2,
     "frag_workers": 4,
     "merge_format": "mp4",
@@ -217,7 +225,7 @@ def validate_config(data: dict, partial: bool = False) -> dict:
 # --------------------------------------------------------------------------
 # yt-dlp runtime: which Python has it, and installing / updating it
 # --------------------------------------------------------------------------
-RUNTIME = {"py": None, "ytdlp": None, "where": None}
+RUNTIME = {"py": None, "ytdlp": None, "where": None, "path": None}   # path: a yt-dlp zipapp to import from
 RUNTIME_LOCK = threading.Lock()
 
 
@@ -225,11 +233,19 @@ def venv_python() -> Path:
     return VENV_DIR / ("Scripts/python.exe" if IS_WIN else "bin/python")
 
 
-def ytdlp_version(py) -> str | None:
+def zip_env(zipapp) -> dict:
+    """Environment for a Python child that imports yt-dlp from a zipapp (Android)."""
+    env = dict(os.environ)
+    if zipapp:
+        env["PYTHONPATH"] = str(zipapp) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    return env
+
+
+def ytdlp_version(py, zipapp=None) -> str | None:
     try:
         r = subprocess.run(
             [str(py), "-c", "import sys,yt_dlp;sys.stdout.write(yt_dlp.version.__version__)"],
-            capture_output=True, text=True, timeout=60, **NO_WINDOW)
+            capture_output=True, text=True, timeout=120, env=zip_env(zipapp), **NO_WINDOW)
         if r.returncode == 0 and r.stdout.strip():
             return r.stdout.strip()
     except Exception:
@@ -237,9 +253,25 @@ def ytdlp_version(py) -> str | None:
     return None
 
 
+ANDROID_YTDLP = CONF_DIR / "yt-dlp" / "yt-dlp"   # newer yt-dlp downloaded on the phone
+
+
 def find_runtime() -> None:
     with RUNTIME_LOCK:
         me = console_python(sys.executable)
+        if ANDROID:
+            found = []
+            for zp, where in ((ANDROID_YTDLP, "private"), (Path(BUNDLED_YTDLP_ZIP) if BUNDLED_YTDLP_ZIP else None, "bundled")):
+                if zp and zp.is_file():
+                    v = ytdlp_version(me, zp)
+                    if v:
+                        found.append((vtuple(v), v, str(zp), where))
+            if found:
+                _, v, zp, where = max(found)
+                RUNTIME.update(py=str(me), ytdlp=v, where=where, path=zp)
+            else:
+                RUNTIME.update(py=None, ytdlp=None, where=None, path=None)
+            return
         mine = "bundled" if APP_DIR / "python" in me.parents else "system"
         for py, where in ((venv_python(), "private"), (me, mine)):
             if py.exists():
@@ -262,7 +294,32 @@ def _pip(py, *args, timeout=600) -> tuple[bool, str]:
 def install_ytdlp(echo=None) -> tuple[bool, str]:
     """Install or upgrade yt-dlp. Prefers a private venv so system Python stays untouched."""
     with UPDATE_LOCK:
-        return _install_ytdlp(echo)
+        return _update_zipapp() if ANDROID else _install_ytdlp(echo)
+
+
+def _update_zipapp() -> tuple[bool, str]:
+    """Android: fetch the latest yt-dlp zipapp from its GitHub release and use it if it runs."""
+    ua = {"User-Agent": f"RipStitchEngine/{VERSION}"}
+    try:
+        rel = json.loads(urllib.request.urlopen(urllib.request.Request(
+            "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest", headers=ua), timeout=30).read())
+        tag = str(rel.get("tag_name") or "")
+        if tag and RUNTIME["ytdlp"] and vtuple(tag) <= vtuple(RUNTIME["ytdlp"]):
+            return True, f"yt-dlp {RUNTIME['ytdlp']} is already the latest"
+        ANDROID_YTDLP.parent.mkdir(parents=True, exist_ok=True)
+        tmp = ANDROID_YTDLP.with_name("yt-dlp.new")
+        data = urllib.request.urlopen(urllib.request.Request(
+            "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp", headers=ua), timeout=300).read()
+        tmp.write_bytes(data)
+        v = ytdlp_version(console_python(sys.executable), tmp)
+        if not v:
+            tmp.unlink(missing_ok=True)
+            return False, "the downloaded yt-dlp didn't start"
+        os.replace(tmp, ANDROID_YTDLP)
+        find_runtime()
+        return True, f"yt-dlp {v} installed"
+    except Exception as e:
+        return False, f"couldn't update yt-dlp: {e}"
 
 
 UPDATE_LOCK = threading.Lock()
@@ -303,10 +360,15 @@ def _install_ytdlp(echo=None) -> tuple[bool, str]:
 TOOLS = {"ffmpeg": None, "ffmpeg_version": None, "js": None, "checked": 0}
 
 
+def ffprobe_beside(ff: str) -> bool:
+    p = Path(ff)
+    return p.with_name(p.name.replace("ffmpeg", "ffprobe")).is_file()
+
+
 def check_tools(force=False) -> None:
     if not force and time.time() - TOOLS["checked"] < 30:
         return
-    ff = shutil.which("ffmpeg")
+    ff = ANDROID_FFMPEG if ANDROID_FFMPEG and Path(ANDROID_FFMPEG).is_file() else shutil.which("ffmpeg")
     ver = None
     if ff:
         try:
@@ -316,7 +378,10 @@ def check_tools(force=False) -> None:
         except Exception:
             ver = "unknown"
     js = next((n for n in ("deno", "node", "bun") if shutil.which(n)), None)
-    TOOLS.update(ffmpeg=bool(ff and shutil.which("ffprobe")), ffmpeg_version=ver, js=js, checked=time.time())
+    if ANDROID_JS and Path(ANDROID_JS.split(":", 1)[-1]).is_file():
+        js = ANDROID_JS.split(":", 1)[0]
+    probe_ok = ffprobe_beside(ff) if ff and ANDROID_FFMPEG else bool(shutil.which("ffprobe"))
+    TOOLS.update(ffmpeg=bool(ff and probe_ok), ffmpeg_version=ver, js=js, checked=time.time())
 
 
 # --------------------------------------------------------------------------
@@ -920,7 +985,7 @@ def kill_tree(proc: subprocess.Popen):
 
 
 def spawn_worker(spec: dict) -> subprocess.Popen:
-    env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
+    env = dict(zip_env(RUNTIME.get("path")), PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
     kw = {"creationflags": 0x00000200 | 0x08000000} if IS_WIN else {"start_new_session": True}
     proc = subprocess.Popen(
         [RUNTIME["py"], "-u", str(ENGINE_PATH), "--worker"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -932,6 +997,10 @@ def spawn_worker(spec: dict) -> subprocess.Popen:
 
 def common_argv(cfg) -> list:
     a = ["--no-colors", "--flat-playlist"]
+    if ANDROID_FFMPEG:
+        a += ["--ffmpeg-location", ANDROID_FFMPEG]   # yt-dlp finds libffprobe.so beside it
+    if ANDROID_JS:
+        a += ["--js-runtimes", ANDROID_JS]
     if cfg.get("cookies_from"):
         a += ["--cookies-from-browser", cfg["cookies_from"]]
     return a
@@ -1406,6 +1475,8 @@ def _pick_linux(start: str, title: str) -> str | None:
 
 
 def reveal(path: str | None):
+    if ANDROID:
+        raise PickerUnavailable("The RipStitch app opens files itself.")
     with CFG_LOCK:
         out = CFG["out_dir"]
     target = Path(path) if path else Path(out)
@@ -1501,7 +1572,7 @@ def health() -> dict:
         "ytdlp": RUNTIME["ytdlp"], "runtime": RUNTIME["where"], "python": platform.python_version(),
         "ffmpeg": TOOLS["ffmpeg"], "ffmpeg_version": TOOLS["ffmpeg_version"], "js_runtime": TOOLS["js"],
         "free_bytes": free_bytes(cfg["out_dir"]), "out_dir": cfg["out_dir"], "config": cfg,
-        "platform": "windows" if IS_WIN else "mac" if IS_MAC else "linux",
+        "platform": "android" if ANDROID else "windows" if IS_WIN else "mac" if IS_MAC else "linux",
         "install": install_kind(), "log_file": str(LOG_FILE),
         "defaults": DEFAULTS, "choices": CHOICES,
     }
@@ -1528,9 +1599,23 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Expose-Headers", "Content-Length, Content-Disposition, X-File-Name")
         self.send_header("Vary", "Origin")
 
+    def _key_ok(self) -> bool:
+        if not SECRET:
+            return True
+        if secrets.compare_digest(self.headers.get("X-RipStitch-Key") or "", SECRET):
+            return True
+        for part in (self.headers.get("Cookie") or "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == "rs_key" and secrets.compare_digest(v, SECRET):
+                return True
+        return False
+
     def _guard(self, write=False) -> bool:
         if not self._host_ok():
             self._json(403, {"ok": False, "error": "bad host"}, cors=False)
+            return False
+        if not self._key_ok():
+            self._json(403, {"ok": False, "error": "this engine belongs to the RipStitch app"}, cors=False)
             return False
         o = self.headers.get("Origin")
         if o and not origin_allowed(o):
@@ -1627,6 +1712,8 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         if not self._guard(write=True):
             return
+        if path == "/api/save":
+            return self._save_upload()
         try:
             body = self._body()
         except Exception as e:
@@ -1735,6 +1822,38 @@ class Handler(BaseHTTPRequestHandler):
             if VERBOSE:
                 traceback.print_exc()
             return self._json(500, {"ok": False, "error": str(e)})
+
+    # -- files the page hands over (Android WebView can't download blob: links itself)
+    def _save_upload(self):
+        if not ANDROID:
+            return self._json(404, {"ok": False, "error": "unknown endpoint"})
+        try:
+            n = int(self.headers.get("Content-Length") or -1)
+            name = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "_", unquote(self.headers.get("X-File-Name") or "")).strip(" .")[:180]
+            if n < 0 or not name:
+                return self._json(400, {"ok": False, "error": "send the file with a name and a length"})
+            with CFG_LOCK:
+                folder = Path(CFG["out_dir"]) / "Stitch"
+            folder.mkdir(parents=True, exist_ok=True)
+            dest = unique_path(folder / name)
+            tmp = dest.with_name(dest.name + ".part")
+            left = n
+            with open(tmp, "wb") as f:
+                while left > 0:
+                    chunk = self.rfile.read(min(1 << 20, left))
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    left -= len(chunk)
+            if left:
+                tmp.unlink(missing_ok=True)
+                return self._json(400, {"ok": False, "error": "the upload stopped part-way"})
+            os.replace(tmp, dest)
+            return self._json(200, {"ok": True, "path": str(dest), "name": dest.name, "size": n})
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        except OSError as e:
+            return self._json(500, {"ok": False, "error": f"couldn't save: {e}"})
 
     # -- files
     def _file(self, q):

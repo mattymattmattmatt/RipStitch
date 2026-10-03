@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Downloads live in shared storage (Download/RipStitch); Open and Share hand them over from there. -->
+<paths>
+    <external-path name="storage" path="." />
+    <cache-path name="cache" path="." />
+</paths>

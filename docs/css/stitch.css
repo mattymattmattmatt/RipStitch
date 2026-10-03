@@ -218,4 +218,28 @@ body.busy .clip{cursor:default}
 @media (max-width:1100px){.dock-hint{display:none}}
 @media (max-width:700px){.work{grid-template-columns:1fr}.side{display:none}.transport .tp-info{display:none}}
 @media (max-width:620px){.transport{flex-wrap:wrap;row-gap:6px;padding-bottom:10px}.transport .grow{display:none}.tc b{font-size:14px}}
+
+/* phones: viewer, timeline and the clip / output panel stack in one scrolling page */
+@media (max-width:700px),(max-height:520px){
+  #view-stitch{display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+  #view-stitch .work{display:contents}
+  #view-stitch .viewer{order:1;flex:0 0 auto;height:calc(min(100vw,900px)*.5625 + 100px);max-height:72vh;min-height:260px}
+  #view-stitch .split{display:none}
+  #view-stitch .dock{order:2;flex:0 0 auto;height:220px;border-top:1px solid var(--line)}
+  #view-stitch .side{order:3;display:flex;flex:0 0 auto;border-left:0;border-top:1px solid var(--line)}
+  #view-stitch .sscroll{overflow:visible;flex:0 0 auto}
+  .empty{inset:10px;gap:8px;padding:14px}.empty .art,.empty .hints{display:none}.empty h2{font-size:17px}
+  .dockbar{padding:0 8px;gap:4px;overflow-x:auto}
+}
+/* fingers: bigger trim handles, swipe the timeline to scroll it, no hover-only buttons */
+@media (pointer:coarse){
+  .track{touch-action:pan-x}
+  .tls.grid .track{touch-action:pan-y}
+  .clip .h{width:22px}.clip .h::before{opacity:.4;width:6px}.clip.tiny .h{width:8px}
+  .clip .x{display:none!important}
+  .sb-h{width:28px;height:30px;top:0;margin-left:-14px}
+  .sb-h::before{top:6px;bottom:6px}
+  .sb-h.in::before,.sb-h.in::after{left:12px}.sb-h.out::before,.sb-h.out::after{right:12px}
+  .sb-h::after{top:6px}
+}
 .bladeln.no{background:var(--cut);box-shadow:0 0 0 1px rgba(0,0,0,.5)}.bladeln.no::before{border-top-color:var(--cut)}

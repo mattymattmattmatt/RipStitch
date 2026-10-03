@@ -424,15 +424,30 @@ function zoomFit(){S.pps=null;renderTimeline();tls.scrollLeft=0;drawRuler()}
 /* timeline pointer interactions */
 track.addEventListener('pointerdown',e=>{
   if(e.button!==0||S.exporting)return;
-  if(S.blade){const h=bladeHit(e);if(h){e.preventDefault();bladeCut(h)}return}
+  const touch=e.pointerType==='touch';
+  if(S.blade){
+    if(touch){touchTap(e,ev=>{const h=bladeHit(ev);if(h)bladeCut(h)},bladeHover);return}
+    const h=bladeHit(e);if(h){e.preventDefault();bladeCut(h)}return;
+  }
   if(e.target.closest('.x'))return;
   const el=e.target.closest('.clip'),h=e.target.closest('.h');
   const c=el&&pool.get(+el.dataset.id);
   if(h&&ok(c)&&S.view==='timeline'){startTrim(e,c,h.classList.contains('l')?'l':'r');return}
-  if(c){startPress(e,c,el);return}
-  if(S.view==='timeline'&&SEQ.total)startRulerScrub(e,tls);
+  if(c){touch?touchTap(e,()=>selectClip(c.id)):startPress(e,c,el);return}
+  if(S.view==='timeline'&&SEQ.total&&!touch)startRulerScrub(e,tls);
 });
-track.addEventListener('pointermove',e=>{if(S.blade&&!S.exporting)bladeHover(e)});
+track.addEventListener('pointermove',e=>{if(S.blade&&!S.exporting&&e.pointerType!=='touch')bladeHover(e)});
+// Fingers: dragging a trim handle mustn't scroll the timeline.
+track.addEventListener('touchmove',e=>{if(TL.trimId!=null)e.preventDefault()},{passive:false});
+/** A tap (lifted without moving much) acts; a swipe scrolls the timeline instead. */
+function touchTap(e,onTap,onDown){
+  const sx=e.clientX,sy=e.clientY;let moved=false;onDown?.(e);
+  const mv=ev=>{if(Math.hypot(ev.clientX-sx,ev.clientY-sy)>10)moved=true;else if(onDown)onDown(ev)};
+  const end=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);removeEventListener('pointercancel',cancel);if(S.blade)bladeHide()};
+  const up=ev=>{end();if(!moved)onTap(ev);else skimEnd()};
+  const cancel=()=>{end();skimEnd()};
+  addEventListener('pointermove',mv);addEventListener('pointerup',up);addEventListener('pointercancel',cancel);
+}
 track.addEventListener('pointerleave',()=>{if(S.blade){bladeHide();skimEnd()}});
 track.addEventListener('contextmenu',e=>{
   const el=e.target.closest('.clip');if(!el)return;
@@ -686,8 +701,7 @@ function saveFrame(){
   const name=`${(c?.name||'frame').replace(/\.[^.]+$/,'')} ${tc(d.currentTime,2).replace(/:/g,'-')}.${jpg?'jpg':'png'}`;
   cv.toBlob(b=>{
     if(!b){toast('Couldn’t capture that frame',{kind:'err'});return}
-    const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
-    toast(`Saved ${name}`,{kind:'ok',sub:`${cv.width}×${cv.height} ${jpg?'JPEG':'PNG'} in your Downloads folder`});
+    saveBlob(b,name).then(()=>{if(!ANDROID)toast(`Saved ${name}`,{kind:'ok',sub:`${cv.width}×${cv.height} ${jpg?'JPEG':'PNG'} in your Downloads folder`})}).catch(()=>{});
   },jpg?'image/jpeg':'image/png',0.92);
 }
 
@@ -1241,7 +1255,7 @@ async function exportVideo(){
   const chunks=[];let bytes=0;rec.ondataavailable=e=>{if(e.data?.size){chunks.push(e.data);bytes+=e.data.size}};
   const stopped=new Promise(r=>rec.onstop=r);
   const X={rec,holds:new Set(),cancel:false,ctl:null,t:0,total,label:'',start:performance.now()};
-  S.exporting=X;lockUI(true);
+  S.exporting=X;lockUI(true);Host?.tell('keepAwake',{on:true});
   const draw=(d,meta)=>{
     if(d.readyState<2||!d.videoWidth)return;
     g.globalAlpha=1;g.fillStyle='#000';g.fillRect(0,0,T.w,T.h);
@@ -1268,7 +1282,7 @@ async function exportVideo(){
   clearInterval(prog);
   try{if(rec.state!=='inactive'){rec.stop();await stopped}}catch{}
   cleanup();
-  S.exporting=null;lockUI(false);xcv.classList.remove('on');updateExportUI(null);
+  S.exporting=null;lockUI(false);xcv.classList.remove('on');updateExportUI(null);Host?.tell('keepAwake',{on:false});
   if(err){toast('Export failed',{kind:'err',sub:err.message});changed();return}
   if(X.cancel||result!=='end'){toast('Export cancelled');changed();return}
   let blob=new Blob(chunks,{type:mime.split(';')[0]});
@@ -1277,9 +1291,9 @@ async function exportVideo(){
   if(lastExportURL)URL.revokeObjectURL(lastExportURL);
   lastExportURL=URL.createObjectURL(blob);
   const dl=()=>{const a=document.createElement('a');a.href=lastExportURL;a.download=name;document.body.appendChild(a);a.click();a.remove()};
-  dl();
   const secs=(performance.now()-X.start)/1000;
-  toast(`Exported ${name}`,{kind:'ok',sub:`${segs.length} clips · ${tc(total,1)} · ${fmtBytes(blob.size)} · took ${tc(secs,0)}`,action:{label:'Save again',fn:dl},ms:15000});
+  if(ANDROID)saveBlob(blob,name).catch(()=>{});
+  else{dl();toast(`Exported ${name}`,{kind:'ok',sub:`${segs.length} clips · ${tc(total,1)} · ${fmtBytes(blob.size)} · took ${tc(secs,0)}`,action:{label:'Save again',fn:dl},ms:15000})}
   changed();
   function cleanup(){
     vs.getTracks().forEach(t=>t.stop());
@@ -1484,7 +1498,7 @@ $('#ffCopy').onclick=async()=>{const t=$('#ffText').value;try{await navigator.cl
 $('#ffDl').onclick=()=>{
   const ps=FF.shell==='ps';let t=$('#ffText').value;
   if(ps)t='\uFEFF'+t.replace(/\r?\n/g,'\r\n'); // BOM so Windows PowerShell 5.1 reads non-ASCII names correctly
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/plain'}));a.download=outName()+(ps?'.ps1':'.sh');a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  saveBlob(new Blob([t],{type:'text/plain'}),outName()+(ps?'.ps1':'.sh')).catch(()=>{});
 };
 $$('dialog [data-close]').forEach(b=>b.onclick=()=>b.closest('dialog').close());
 $$('dialog').forEach(d=>d.addEventListener('click',e=>{if(e.target===d)d.close()}));
@@ -1499,9 +1513,8 @@ function projectData(){
 let saveT=0;function scheduleSave(){clearTimeout(saveT);saveT=setTimeout(()=>{if(!P.autosave)return;if(S.clips.some(ok))LS.set('stitch.session',projectData());else if(!S.clips.length)LS.del('stitch.session')},800)}
 function saveProject(){
   if(!S.clips.length)return;
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(projectData(),null,1)],{type:'application/json'}));
-  a.download=outName()+'.stitch.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
-  toast('Project saved',{kind:'ok',sub:'Stores order, cuts, trims, fades, volume and output settings — not the video files.'});
+  saveBlob(new Blob([JSON.stringify(projectData(),null,1)],{type:'application/json'}),outName()+'.stitch.json')
+    .then(()=>{if(!ANDROID)toast('Project saved',{kind:'ok',sub:'Stores order, cuts, trims, fades, volume and output settings — not the video files.'})}).catch(()=>{});
 }
 function loadProject(p,src){
   if(!p||!(p.app==='SPLICE'||p.app==='RipStitch')||!Array.isArray(p.clips))throw new Error('Not a Stitch project file');
@@ -1685,6 +1698,13 @@ Settings.add({id:'stitch',order:20,title:'Stitch',icon:'cut',sub:'How the editor
 return{
   onShow(){changed();requestAnimationFrame(()=>{layoutFrame();renderTimeline()})},
   onHide(){stopPlayback();closeMenus();closeCtx();bladeHide();skimEnd()},
+  onBack(){
+    if(!ctx.hidden){closeCtx();return true}
+    if(!$('#mAdd').hidden||!$('#mSort').hidden){closeMenus();return true}
+    if(S.blade){setBlade(false);return true}
+    if(V.playing){stopPlayback();return true}
+    return false;
+  },
   canLeave(){if(S.exporting){toast('Export in progress',{kind:'warn',sub:'Stay on Stitch until it finishes: browsers pause hidden video. Cancel the export to leave.'});return false}return true},
   onKey,addFiles,openProjectFile,
   busy:()=>!!S.exporting,

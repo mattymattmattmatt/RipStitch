@@ -15,9 +15,14 @@ const pad2=n=>String(n).padStart(2,'0');
 const plural=(n,w,p)=>`${n} ${n===1?w:(p||w+'s')}`;
 const IS_MAC=/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent);
 const MOD=IS_MAC?'⌘':'Ctrl';
-/** Running inside the RipStitch desktop app (its window adds this to the user agent). */
+/** Running inside the RipStitch desktop or Android app (their windows add these to the user agent). */
 const DESKTOP=/RipStitchDesktop/.test(navigator.userAgent);
-if(DESKTOP)document.documentElement.classList.add('desktop');
+const ANDROID=/RipStitchAndroid/.test(navigator.userAgent);
+/** One of the RipStitch apps, with the engine built in (not a browser tab). */
+const APP=DESKTOP||ANDROID;
+document.documentElement.classList.toggle('app',APP);
+document.documentElement.classList.toggle('desktop',DESKTOP);
+document.documentElement.classList.toggle('android',ANDROID);
 const LS={
   get(k,d){try{const v=localStorage.getItem('rs.'+k);return v==null?d:JSON.parse(v)}catch{return d}},
   set(k,v){try{localStorage.setItem('rs.'+k,JSON.stringify(v))}catch{}},
@@ -67,10 +72,10 @@ function toast(msg,o={}){
     if(sub!==undefined){const s=t.querySelector('small');s.hidden=!sub;if(o.html)s.innerHTML=sub||'';else s.textContent=sub||''}
   };
   setTxt(msg,o.sub||null);
-  if(o.action){const b=document.createElement('button');b.className='btn sm';b.textContent=o.action.label;b.onclick=()=>{o.action.fn();kill()};t.appendChild(b)}
+  for(const a of[o.action,...(o.actions||[])].filter(Boolean)){const b=document.createElement('button');b.className='btn sm';b.textContent=a.label;b.onclick=()=>{a.fn();kill()};t.appendChild(b)}
   const x=document.createElement('button');x.className='tclose';x.innerHTML=ic('x');x.setAttribute('aria-label','Dismiss');x.onclick=()=>kill();t.appendChild(x);
   box.appendChild(t);while(box.children.length>4)box.firstChild.remove();
-  const ms=o.ms??(kind==='err'?12000:o.action?6500:3200);
+  const ms=o.ms??(kind==='err'?12000:o.action||o.actions?6500:3200);
   let tm=ms>0?setTimeout(kill,ms):0;
   t.onmouseenter=()=>clearTimeout(tm);t.onmouseleave=()=>{if(ms>0)tm=setTimeout(kill,1800)};
   function kill(){clearTimeout(tm);t.remove()}
@@ -219,15 +224,53 @@ const Palette=(()=>{
 })();
 
 /* ============================================================
-   DESKTOP BRIDGE — asks the RipStitch window (WebView2) for things
-   a web page can't do itself, like the Windows folder picker.
+   APP BRIDGE — asks the RipStitch window for things a web page
+   can't do itself: folder pickers, opening and sharing files…
+   Desktop: WebView2 (chrome.webview). Android: window.rsHost.
    ============================================================ */
 const Host=(()=>{
-  const wv=DESKTOP&&window.chrome?.webview;if(!wv)return null;
-  let n=0;const wait=new Map();
-  wv.addEventListener('message',e=>{const m=e.data,f=m&&wait.get(m.id);if(f){wait.delete(m.id);f(m)}});
-  return{call:(cmd,args={})=>new Promise(res=>{const id='m'+(++n);wait.set(id,res);wv.postMessage({...args,id,cmd})})};
+  const wv=DESKTOP?window.chrome?.webview:ANDROID?window.rsHost:null;if(!wv)return null;
+  let n=0;const wait=new Map(),subs={};
+  const got=m=>{
+    if(typeof m==='string'){try{m=JSON.parse(m)}catch{return}}
+    if(!m)return;
+    const f=m.id&&wait.get(m.id);if(f){wait.delete(m.id);f(m);return}
+    if(m.event)(subs[m.event]||[]).forEach(fn=>{try{fn(m)}catch(e){console.error(e)}});
+  };
+  if(DESKTOP)wv.addEventListener('message',e=>got(e.data));
+  else{wv.onmessage=e=>got(e.data);window.__rsEvent=got}
+  const send=m=>DESKTOP?wv.postMessage(m):wv.postMessage(JSON.stringify(m));
+  return{
+    /** Ask and wait for the answer: {…} (with .error when it failed). */
+    call:(cmd,args={})=>new Promise(res=>{const id='m'+(++n);wait.set(id,res);send({...args,id,cmd})}),
+    /** Tell the app something; no answer. */
+    tell:(cmd,args={})=>send({...args,cmd}),
+    /** Things the app announces: {event:'share', …}. */
+    on:(ev,fn)=>{(subs[ev]=subs[ev]||[]).push(fn)},
+  };
 })();
+/** Open or share a file the engine saved (Android app). */
+const Files={
+  open:path=>Host?.call('open',{path}).then(r=>{if(r.error)toast(r.error,{kind:'err'})}),
+  share:path=>Host?.call('share',{path}).then(r=>{if(r.error)toast(r.error,{kind:'err'})}),
+  folder:path=>Host?.call('folder',{path:path||''}).then(r=>{if(r.error)toast(r.error,{kind:'err'})}),
+};
+/** Give the person a file. Browsers download it; the Android app saves it in Download/RipStitch/Stitch. */
+async function saveBlob(blob,name){
+  if(!ANDROID){
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),60000);return{name};
+  }
+  const t=toast(`Saving ${name}…`,{ms:0,sub:fmtBytes(blob.size)});
+  try{
+    const r=await fetch('/api/save',{method:'POST',headers:{'X-File-Name':encodeURIComponent(name),'Content-Type':'application/octet-stream'},body:blob});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok||!d.ok)throw new Error(d.error||`the app answered ${r.status}`);
+    t();
+    toast(`Saved ${d.name}`,{kind:'ok',sub:'Download › RipStitch › Stitch',ms:10000,actions:[{label:'Open',fn:()=>Files.open(d.path)},{label:'Share',fn:()=>Files.share(d.path)}]});
+    return d;
+  }catch(e){t.done(`Couldn’t save ${name}`,{kind:'err',sub:e.message,ms:12000});throw e}
+}
 
 /* ============================================================
    SETTINGS — one window; each tool adds its own section
@@ -332,6 +375,12 @@ document.addEventListener('paste',e=>{
     if(url){App.go('rip');Rip.read(url)}else toast('That drop wasn’t a link or a video file',{kind:'warn'});
   });
 })();
+
+/* ---------- the phone's Back button (Android app) ---------- */
+window.RS_back=()=>{
+  const d=$('dialog[open]');if(d){d.close();return true}
+  return!!App.mods[App.mod]?.onBack?.();
+};
 
 /* ---------- install as app ---------- */
 let installEvt=null;

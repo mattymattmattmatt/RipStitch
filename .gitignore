@@ -9,3 +9,8 @@ desktop/obj/
 desktop/payload.zip
 desktop/build.txt
 downloads/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android-smoke/
