@@ -41,6 +41,8 @@ Either way the engine starts by itself when you sign in, runs quietly in the bac
 
 **Prefer a normal program?** [**RipStitch Desktop for Windows**](https://github.com/mattymattmattmatt/RipStitch/releases/download/desktop-latest/RipStitch.exe) is a single `RipStitch.exe` with Rip and Stitch in their own window. There's no browser and nothing to install, and its engine is built in. The first launch unpacks it to `%LOCALAPPDATA%\RipStitch\Desktop` (about 30 seconds); after that it opens in a couple of seconds. It keeps its own settings and history, separate from the website's engine, and both can run side by side. It uses the Edge WebView2 runtime that ships with Windows 10 and 11.
 
+**On an Android phone?** [**RipStitch.apk**](https://github.com/mattymattmattmatt/RipStitch/releases/download/android-latest/RipStitch.apk) is the whole thing as an app: the same Rip and Stitch screens, with the engine (Python, yt-dlp, FFmpeg and QuickJS, via [youtubedl-android](https://github.com/JunkFood02/youtubedl-android)) running on the phone. Downloads land in *Download/RipStitch* and keep going with the screen off. **Share → RipStitch** from YouTube or any app reads the link, and sharing videos to it opens them in Stitch. It isn't on the Play Store, because Google doesn't allow apps that download from YouTube, so Android asks once whether your browser may install apps. Every build is tested on an Android emulator before it's published. The signing key is in the repo on purpose: it only lets new versions install over old ones, and isn't a secret.
+
 To remove it: on Windows use **Settings → Apps → RipStitch Engine**; on macOS / Linux run the same line with `-s -- --uninstall` after `bash`. Your downloads and settings are kept.
 
 Prefer to run it by hand? Install Python 3.10+ and FFmpeg, download [`ripstitch_engine.py`](docs/engine/ripstitch_engine.py) and run `python3 ripstitch_engine.py` (`py` on Windows). It installs yt-dlp into its own private folder on first run.
@@ -123,6 +125,7 @@ docs/                 the website (GitHub Pages serves this folder)
   img/                logo, icons, artwork, screenshots
   sw.js, manifest.webmanifest   offline support and install as an app
 desktop/              RipStitch Desktop: a small C# window (WebView2) around the site, with a private engine
+android/              RipStitch for Android: a Kotlin WebView app running the engine on the phone, plus its CI self-test
 installer/            Windows installer: bundle build script, Inno Setup script, CI smoke test
 tests/                engine unit tests: python -m unittest discover tests
 ```
